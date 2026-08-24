@@ -3,3 +3,5 @@ web/assets/
 decompile/ghidra-project/
 *.pyc
 __pycache__/
+harness/frames/
+evidence/*.tmp
