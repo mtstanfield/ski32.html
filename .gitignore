@@ -5,3 +5,4 @@ decompile/ghidra-project/
 __pycache__/
 harness/frames/
 evidence/*.tmp
+harness/.venv/
