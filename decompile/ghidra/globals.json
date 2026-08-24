@@ -1,0 +1,1205 @@
+{
+ "ski_main_class": {
+  "addr": "0x40a190",
+  "type": "const char \"SkiMain\" (main window class name)",
+  "refs": [],
+  "note": "referenced from code not in the 163-fn set (missing WndProc); game_create_windows uses an identical inline literal"
+ },
+ "ski_status_class": {
+  "addr": "0x40a198",
+  "type": "const char \"SkiStatus\" (status window class name)",
+  "refs": [],
+  "note": "referenced from code not in the 163-fn set (missing WndProc); game_create_windows uses an identical inline literal"
+ },
+ "button_class": {
+  "addr": "0x40a1a4",
+  "type": "const char \"button\" (registered class name)",
+  "refs": [],
+  "note": "no reference from any of the 163 decompiled functions"
+ },
+ "frame_col_table": {
+  "addr": "0x40a1ac",
+  "type": "uint16[64] (frame index -> sprite column; [1..44, 65..81, 83, 84, 85, 84, 49, 87, 88, 89])",
+  "refs": [
+   "game_entity_set_frame"
+  ]
+ },
+ "spawn_frame_table": {
+  "addr": "0x40a22c",
+  "type": "int[11] (default frame per spawn type 0-10: [6, 22, 27, 31, 39, 42, 42, 42, 42, 56, 60])",
+  "refs": [
+   "game_spawn"
+  ]
+ },
+ "key_action_map1": {
+  "addr": "0x40a258",
+  "type": "int[5] (key-state -> action map: [1, 4, 2, 0, 3])",
+  "refs": [
+   "wproc_main_input"
+  ]
+ },
+ "key_action_map2": {
+  "addr": "0x40a25c",
+  "type": "int[5] (key-state -> action map: [4, 2, 0, 3, 1])",
+  "refs": [
+   "wproc_main_input"
+  ]
+ },
+ "activate_sound_table": {
+  "addr": "0x40a308",
+  "type": "(u16 flag, u16 param)[10] (per-type activation sound record, types 0-9)",
+  "refs": [
+   "game_entity_activate"
+  ]
+ },
+ "activate_anim_table": {
+  "addr": "0x40a434",
+  "type": "mixed (type -> frame/animation params, used by game_entity_activate)",
+  "refs": [
+   "game_entity_activate"
+  ]
+ },
+ "anim_type1_table": {
+  "addr": "0x40a490",
+  "type": "(u16, u16)[] (per-frame animation step table, entity type 1)",
+  "refs": [
+   "game_anim_type1"
+  ]
+ },
+ "anim_type3_table": {
+  "addr": "0x40a4e0",
+  "type": "(u16, u16)[] (per-frame animation step table, entity type 3)",
+  "refs": [
+   "game_anim_type3"
+  ]
+ },
+ "entity_template": {
+  "addr": "0x40c030",
+  "type": "entity[80B] (zero-initialized template; field +0x1c = 0x40)",
+  "refs": [
+   "game_entity_from_template"
+  ]
+ },
+ "entity_template_sprites": {
+  "addr": "0x40c044",
+  "type": "dword (template sprite-column-array pointer field)",
+  "refs": [
+   "game_entity_from_template"
+  ]
+ },
+ "ini_section_ski": {
+  "addr": "0x40c080",
+  "type": "const char \"Ski\" (INI section name)",
+  "refs": [
+   "score_show"
+  ]
+ },
+ "entpack_ini": {
+  "addr": "0x40c084",
+  "type": "const char \"entpack.ini\" (high-score INI file name)",
+  "refs": [
+   "score_show"
+  ]
+ },
+ "source_file": {
+  "addr": "0x40c090",
+  "type": "const char \"V:\\hack\\ski32\\ski2.c\" (assertion file path)",
+  "refs": [
+   "draw_entity",
+   "draw_scene",
+   "game_anim_type1",
+   "game_anim_type10",
+   "game_anim_type2",
+   "game_anim_type3",
+   "game_anim_type9",
+   "game_anim_update",
+   "game_bbox_expand",
+   "game_collide",
+   "game_entity_activate",
+   "game_entity_alloc",
+   "game_entity_die",
+   "game_entity_new",
+   "game_entity_new_col",
+   "game_entity_reap",
+   "game_entity_rect",
+   "game_entity_rect_calc",
+   "game_entity_set_col",
+   "game_entity_set_frame",
+   "game_entity_set_pos",
+   "game_entity_step",
+   "game_gate_advance",
+   "game_gate_cruise",
+   "game_gate_list_add",
+   "game_gate_list_clear",
+   "game_gate_scan",
+   "game_gate_set_col",
+   "game_gate_spawn",
+   "game_gate_type4",
+   "game_gate_update",
+   "game_group_head",
+   "game_group_merge",
+   "game_group_split",
+   "game_render",
+   "game_spawn_pos",
+   "game_sprite_frame",
+   "game_style_fs",
+   "game_style_gs",
+   "game_style_ss",
+   "util_lerp",
+   "util_rect_equal",
+   "util_rect_overlap",
+   "wproc_main_input",
+   "wproc_status_destroy"
+  ]
+ },
+ "assert_caption": {
+  "addr": "0x40c0a8",
+  "type": "const char \"Assertion Failed\"",
+  "refs": [
+   "util_assert"
+  ]
+ },
+ "assert_fmt": {
+  "addr": "0x40c0bc",
+  "type": "const char \"%s line %u\"",
+  "refs": [
+   "util_assert"
+  ]
+ },
+ "out_of_memory": {
+  "addr": "0x40c0c8",
+  "type": "const char \"[out o' memory]\" (returned when LoadStringA fails)",
+  "refs": [
+   "util_str_cache"
+  ]
+ },
+ "ini_key_ss": {
+  "addr": "0x40c0d8",
+  "type": "const char \"SS\" (INI style key)",
+  "refs": [
+   "game_style_ss"
+  ]
+ },
+ "blank_lines": {
+  "addr": "0x40c0dc",
+  "type": "const char \"\\n\\n\" (also referenced by CRT 0x407a7d runtime-error path)",
+  "refs": [
+   "FUN_00407a7d",
+   "score_show"
+  ],
+  "note": "shared: also referenced by CRT runtime-error report 0x407a7d"
+ },
+ "fmt_s": {
+  "addr": "0x40c0e0",
+  "type": "const char \"%s\"",
+  "refs": [
+   "score_show"
+  ]
+ },
+ "fmt_9ld": {
+  "addr": "0x40c0e4",
+  "type": "const char \"%9ld\" (high-score value format)",
+  "refs": [
+   "score_show"
+  ]
+ },
+ "fmt_ld_sp": {
+  "addr": "0x40c0ec",
+  "type": "const char \"%ld \" (score list item format)",
+  "refs": [
+   "score_show"
+  ]
+ },
+ "ini_key_fs": {
+  "addr": "0x40c0f4",
+  "type": "const char \"FS\" (INI style key)",
+  "refs": [
+   "game_style_fs"
+  ]
+ },
+ "ini_key_gs": {
+  "addr": "0x40c0f8",
+  "type": "const char \"GS\" (INI style key)",
+  "refs": [
+   "game_style_gs"
+  ]
+ },
+ "nosound_flag": {
+  "addr": "0x40c0fc",
+  "type": "const char \"nosound\" (command-line flag disabling sound)",
+  "refs": [
+   "main_winmain"
+  ]
+ },
+ "insufficient_memory": {
+  "addr": "0x40c104",
+  "type": "const char \"Insufficient local memory.\"",
+  "refs": [
+   "game_init_mem"
+  ]
+ },
+ "icon_ski": {
+  "addr": "0x40c120",
+  "type": "const char \"iconSki\" (icon resource name)",
+  "refs": [
+   "game_create_windows"
+  ]
+ },
+ "wave_type": {
+  "addr": "0x40c128",
+  "type": "const char \"WAVE\" (FindResourceA resource type)",
+  "refs": [
+   "snd_load_wave"
+  ]
+ },
+ "bitmap_fail_msg": {
+  "addr": "0x40c130",
+  "type": "const char \"Whoa, like, can't load bitmaps!  Yer outa memory, duuude!\"",
+  "refs": [
+   "wproc_main_create"
+  ]
+ },
+ "wave_res_3": {
+  "addr": "0x40c5d0",
+  "type": "WAVE pair {HGLOBAL, void*} (resource id 3)",
+  "refs": [
+   "game_create_windows",
+   "snd_shutdown",
+   "game_collide"
+  ]
+ },
+ "spawn_y_cursor": {
+  "addr": "0x40c5d8",
+  "type": "int (spawn Y cursor, step 0x3c; zeroed by game_reset)",
+  "refs": [
+   "game_reset",
+   "game_physics"
+  ]
+ },
+ "last_status_tick": {
+  "addr": "0x40c5dc",
+  "type": "DWORD tick (last status-panel redraw)",
+  "refs": [
+   "game_tick",
+   "draw_status_values"
+  ]
+ },
+ "gate_array_1": {
+  "addr": "0x40c5e0",
+  "type": "pointer (gate array 1)",
+  "refs": [
+   "game_level_init",
+   "game_physics"
+  ]
+ },
+ "offscreen_mask_dc": {
+  "addr": "0x40c5ec",
+  "type": "HDC (mask DC used with offscreen bitmap)",
+  "refs": [
+   "draw_offscreen_resize",
+   "draw_entity",
+   "wproc_main_create",
+   "game_sprites_load",
+   "wproc_main_destroy"
+  ]
+ },
+ "view_size": {
+  "addr": "0x40c5f0",
+  "type": "short[2] {client width (set by wproc_main_size); spawn Y offset}",
+  "refs": [
+   "game_gate_cruise",
+   "wproc_main_size",
+   "game_spawn_pos"
+  ]
+ },
+ "tick_delta": {
+  "addr": "0x40c5f4",
+  "type": "DWORD (tick delta since last frame, set by game_tick)",
+  "refs": [
+   "game_tick",
+   "draw_status_values"
+  ]
+ },
+ "sprite_col_table": {
+  "addr": "0x40c5f8",
+  "type": "pointer (LocalAlloc 0x5a0; sprite column table)",
+  "refs": [
+   "game_init_mem",
+   "game_entity_set_col",
+   "game_entity_from_template",
+   "game_gate_list_add",
+   "game_startpoles_spawn",
+   "game_entity_rect",
+   "game_gate_set_col",
+   "game_sprites_load"
+  ]
+ },
+ "player_x": {
+  "addr": "0x40c5fc",
+  "type": "short (player screen X / view center X)",
+  "refs": [
+   "game_level_init",
+   "game_create_windows",
+   "game_entity_rect_calc",
+   "game_set_center",
+   "game_spawn_pos",
+   "game_gate_update",
+   "game_gate_scan",
+   "wproc_main_aim"
+  ]
+ },
+ "pause_tick": {
+  "addr": "0x40c600",
+  "type": "DWORD tick (tick at pause; game_resume uses it for style timing)",
+  "refs": [
+   "game_resume",
+   "game_pause"
+  ]
+ },
+ "wave_res_8": {
+  "addr": "0x40c608",
+  "type": "WAVE pair {HGLOBAL, void*} (resource id 8)",
+  "refs": [
+   "game_anim_type2",
+   "game_create_windows",
+   "snd_shutdown"
+  ]
+ },
+ "render_needed": {
+  "addr": "0x40c610",
+  "type": "int flag (render needed; set by game_tick)",
+  "refs": [
+   "game_reset",
+   "game_tick",
+   "wproc_main_input",
+   "wproc_main_turn"
+  ]
+ },
+ "offscreen_bitmap": {
+  "addr": "0x40c614",
+  "type": "HBITMAP (offscreen buffer; resized by draw_offscreen_resize)",
+  "refs": [
+   "draw_offscreen_resize",
+   "wproc_main_create",
+   "game_sprites_load",
+   "wproc_main_destroy"
+  ]
+ },
+ "entity_list_head": {
+  "addr": "0x40c618",
+  "type": "entity* (active entity list head)",
+  "refs": [
+   "game_freelist_init",
+   "game_entity_alloc",
+   "game_world_shift",
+   "game_set_center",
+   "game_render",
+   "game_entity_reap",
+   "game_physics",
+   "draw_scene"
+  ]
+ },
+ "h_instance": {
+  "addr": "0x40c61c",
+  "type": "HINSTANCE (set by game_create_windows)",
+  "refs": [
+   "util_str_cache",
+   "game_create_windows",
+   "snd_load_wave",
+   "util_load_bitmap"
+  ]
+ },
+ "prev_obj_mask_big": {
+  "addr": "0x40c620",
+  "type": "HGDIOBJ (previous object selected in mask DC c710)",
+  "refs": [
+   "wproc_main_create",
+   "game_sprites_load",
+   "wproc_main_destroy"
+  ]
+ },
+ "status_hwnd": {
+  "addr": "0x40c624",
+  "type": "HWND (SkiStatus window handle)",
+  "refs": [
+   "game_create_windows",
+   "wproc_status_destroy",
+   "wproc_status_reposition"
+  ]
+ },
+ "wave_res_6": {
+  "addr": "0x40c628",
+  "type": "WAVE pair {HGLOBAL, void*} (resource id 6)",
+  "refs": [
+   "game_create_windows",
+   "snd_shutdown",
+   "game_collide"
+  ]
+ },
+ "gate_array_2": {
+  "addr": "0x40c630",
+  "type": "pointer (gate array 2)",
+  "refs": [
+   "game_level_init",
+   "game_physics"
+  ]
+ },
+ "screen_dc": {
+  "addr": "0x40c63c",
+  "type": "HDC (main window DC from WM_CREATE)",
+  "refs": [
+   "draw_offscreen_resize",
+   "game_tick",
+   "wproc_main_input",
+   "wproc_main_turn",
+   "wproc_main_key",
+   "wproc_main_create",
+   "wproc_main_destroy"
+  ]
+ },
+ "player_x_offset": {
+  "addr": "0x40c640",
+  "type": "short (player X offset from view center; zeroed by game_reset)",
+  "refs": [
+   "game_reset",
+   "game_world_shift",
+   "game_level_init",
+   "game_entity_rect_calc",
+   "game_physics",
+   "game_spawn_pos"
+  ]
+ },
+ "prev_obj_offscreen": {
+  "addr": "0x40c644",
+  "type": "HGDIOBJ (previous object selected in offscreen DC c730)",
+  "refs": [
+   "wproc_main_create",
+   "game_sprites_load",
+   "wproc_main_destroy"
+  ]
+ },
+ "entity_pool": {
+  "addr": "0x40c648",
+  "type": "pointer (LocalAlloc 8000 = 100 x 80B entity pool)",
+  "refs": [
+   "game_init_mem",
+   "game_freelist_init"
+  ]
+ },
+ "player_ent": {
+  "addr": "0x40c64c",
+  "type": "entity* (player entity pointer, set by game_start)",
+  "refs": [
+   "game_reset",
+   "game_start",
+   "game_entity_set_pos",
+   "game_world_shift",
+   "game_entity_reap"
+  ]
+ },
+ "game_over": {
+  "addr": "0x40c650",
+  "type": "int flag (game over; cleared by game_start; checked by game_restart)",
+  "refs": [
+   "game_start",
+   "game_resume",
+   "game_pause_toggle",
+   "game_restart"
+  ]
+ },
+ "gate_array_3": {
+  "addr": "0x40c658",
+  "type": "pointer (gate array 3)",
+  "refs": [
+   "game_level_init",
+   "game_physics"
+  ]
+ },
+ "prev_obj_status_dc": {
+  "addr": "0x40c664",
+  "type": "HGDIOBJ (previous object selected in status DC c6cc; DEFAULT_GUI_FONT)",
+  "refs": [
+   "wproc_status_destroy",
+   "wproc_status_create"
+  ]
+ },
+ "status_text_h": {
+  "addr": "0x40c668",
+  "type": "short[2] {tmHeight; panel height = 4 x tmHeight}",
+  "refs": [
+   "draw_text_line",
+   "wproc_status_create"
+  ]
+ },
+ "status_panel_w": {
+  "addr": "0x40c66a",
+  "type": "short (status panel width, measured in wproc_status_create)",
+  "refs": [
+   "wproc_status_create",
+   "wproc_status_reposition"
+  ]
+ },
+ "status_panel_pos": {
+  "addr": "0x40c66c",
+  "type": "short[4] (status panel position/size, measured in wproc_status_create)",
+  "refs": [
+   "wproc_status_create",
+   "wproc_status_reposition"
+  ]
+ },
+ "speed_flag": {
+  "addr": "0x40c670",
+  "type": "int (F key speed toggle; zeroed by game_reset)",
+  "refs": [
+   "game_reset",
+   "game_entity_step",
+   "wproc_main_key"
+  ]
+ },
+ "str_cache": {
+  "addr": "0x40c674",
+  "type": "pointer (LocalAlloc 0x50; util_str_cache string cache)",
+  "refs": [
+   "game_init_mem",
+   "util_str_cache"
+  ]
+ },
+ "timer_interval": {
+  "addr": "0x40c678",
+  "type": "DWORD (SetTimer interval ms; 0x28 = 40ms)",
+  "refs": [
+   "game_reset",
+   "game_resume"
+  ]
+ },
+ "paused_by_dialog": {
+  "addr": "0x40c67c",
+  "type": "int flag (auto-pause across dialogs, set by game_pause_auto)",
+  "refs": [
+   "game_create_windows",
+   "game_pause_auto"
+  ]
+ },
+ "view_left": {
+  "addr": "0x40c680",
+  "type": "short[2] {view top Y [inferred]; view left X = client x - 0x78}",
+  "refs": [
+   "wproc_main_size",
+   "game_physics",
+   "game_gate_spawn"
+  ]
+ },
+ "view_top": {
+  "addr": "0x40c684",
+  "type": "short (view top Y = client top - 0x78, set by wproc_main_size)",
+  "refs": [
+   "wproc_main_size",
+   "game_gate_update",
+   "game_gate_scan"
+  ]
+ },
+ "view_right": {
+  "addr": "0x40c688",
+  "type": "short[2] {high short: view right X = client width + 0x78}",
+  "refs": [
+   "wproc_main_size"
+  ]
+ },
+ "view_bottom": {
+  "addr": "0x40c68c",
+  "type": "short (view bottom Y = client bottom + 0x78)",
+  "refs": [
+   "wproc_main_size",
+   "game_gate_update",
+   "game_gate_scan"
+  ]
+ },
+ "offscreen_w": {
+  "addr": "0x40c690",
+  "type": "short (offscreen bitmap width, aligned to 0x40)",
+  "refs": [
+   "draw_offscreen_resize",
+   "game_sprites_load"
+  ]
+ },
+ "dialog_open": {
+  "addr": "0x40c694",
+  "type": "int flag (score/pause dialog open; used by game_pause_auto)",
+  "refs": [
+   "game_create_windows",
+   "game_pause_auto"
+  ]
+ },
+ "current_tick": {
+  "addr": "0x40c698",
+  "type": "DWORD tick (current game tick; game_tick updates it)",
+  "refs": [
+   "game_reset",
+   "game_resume",
+   "game_pause",
+   "game_gate_cruise",
+   "game_tick",
+   "draw_status_values",
+   "game_style_ss",
+   "game_style_gs",
+   "game_collide"
+  ]
+ },
+ "white_brush": {
+  "addr": "0x40c69c",
+  "type": "HBRUSH (WHITE_BRUSH; FillRect in wproc_main_paint)",
+  "refs": [
+   "game_create_windows",
+   "wproc_main_paint"
+  ]
+ },
+ "horiz_res": {
+  "addr": "0x40c6a0",
+  "type": "int (GetDeviceCaps HORZRES, set by game_create_windows)",
+  "refs": [
+   "game_create_windows"
+  ]
+ },
+ "mask_dc_small": {
+  "addr": "0x40c6a4",
+  "type": "HDC (mask DC for sprite columns < 0x21)",
+  "refs": [
+   "wproc_main_create",
+   "game_sprites_load",
+   "wproc_main_destroy"
+  ]
+ },
+ "style_score": {
+  "addr": "0x40c6a8",
+  "type": "int (style score; displayed via \"%7ld\"; added by score_add)",
+  "refs": [
+   "game_reset",
+   "draw_status_values",
+   "game_style_fs",
+   "score_add"
+  ]
+ },
+ "client_x": {
+  "addr": "0x40c6b0",
+  "type": "short (client RECT left, from WM_SIZE)",
+  "refs": [
+   "game_level_init",
+   "wproc_main_size",
+   "game_spawn_pos",
+   "game_tick",
+   "wproc_main_input",
+   "wproc_main_turn",
+   "wproc_main_key"
+  ]
+ },
+ "client_y": {
+  "addr": "0x40c6b4",
+  "type": "short (client RECT top, from WM_SIZE)",
+  "refs": [
+   "wproc_main_size",
+   "game_spawn_pos",
+   "wproc_status_reposition"
+  ]
+ },
+ "client_w": {
+  "addr": "0x40c6b8",
+  "type": "short (client RECT width, from WM_SIZE)",
+  "refs": [
+   "game_level_init",
+   "wproc_main_size",
+   "game_spawn_pos",
+   "wproc_status_reposition"
+  ]
+ },
+ "client_h": {
+  "addr": "0x40c6bc",
+  "type": "short (client RECT height, from WM_SIZE)",
+  "refs": [
+   "game_level_init",
+   "wproc_main_size",
+   "game_spawn_pos"
+  ]
+ },
+ "wave_res_1": {
+  "addr": "0x40c6c0",
+  "type": "WAVE pair {HGLOBAL, void*} (resource id 1)",
+  "refs": [
+   "game_create_windows",
+   "snd_shutdown",
+   "game_entity_activate",
+   "game_collide"
+  ]
+ },
+ "main_hwnd": {
+  "addr": "0x40c6c8",
+  "type": "HWND (SkiMain window handle)",
+  "refs": [
+   "main_winmain",
+   "util_assert_box",
+   "game_resume",
+   "game_create_windows",
+   "game_pause_toggle",
+   "game_pause",
+   "game_restart",
+   "wproc_main_input",
+   "score_show"
+  ]
+ },
+ "status_dc": {
+  "addr": "0x40c6cc",
+  "type": "HDC (status window DC from wproc_status_create)",
+  "refs": [
+   "game_tick",
+   "game_player_face",
+   "wproc_status_destroy",
+   "wproc_status_create"
+  ]
+ },
+ "timer_active": {
+  "addr": "0x40c6d0",
+  "type": "int flag (timer running; set by game_resume, cleared by game_pause)",
+  "refs": [
+   "game_resume",
+   "game_create_windows",
+   "game_pause_toggle",
+   "game_pause"
+  ]
+ },
+ "prev_obj_dc": {
+  "addr": "0x40c6d4",
+  "type": "HGDIOBJ (previous GDI object, restored in wproc_main_destroy)",
+  "refs": [
+   "wproc_main_create",
+   "game_sprites_load",
+   "wproc_main_destroy"
+  ]
+ },
+ "client_h_alt": {
+  "addr": "0x40c6d8",
+  "type": "short (client height = bottom - top, set by wproc_main_size; spawn Y random range)",
+  "refs": [
+   "game_gate_cruise",
+   "wproc_main_size",
+   "game_spawn_pos"
+  ]
+ },
+ "wave_res_7": {
+  "addr": "0x40c6e0",
+  "type": "WAVE pair {HGLOBAL, void*} (resource id 7)",
+  "refs": [
+   "game_create_windows",
+   "snd_shutdown",
+   "game_collide"
+  ]
+ },
+ "offscreen_h": {
+  "addr": "0x40c6e8",
+  "type": "short (offscreen bitmap height, aligned to 0x40)",
+  "refs": [
+   "draw_offscreen_resize",
+   "game_sprites_load"
+  ]
+ },
+ "mask_dc_2": {
+  "addr": "0x40c6ec",
+  "type": "HDC (mask DC, CreateCompatibleDC in game_sprites_load)",
+  "refs": [
+   "wproc_main_create",
+   "game_sprites_load",
+   "wproc_main_destroy"
+  ]
+ },
+ "wave_res_9": {
+  "addr": "0x40c6f0",
+  "type": "WAVE pair {HGLOBAL, void*} (resource id 9)",
+  "refs": [
+   "game_gate_cruise",
+   "game_create_windows",
+   "snd_shutdown"
+  ]
+ },
+ "style_tick": {
+  "addr": "0x40c6f8",
+  "type": "DWORD tick (style timing; zeroed by game_reset)",
+  "refs": [
+   "game_style_ss",
+   "game_style_gs"
+  ]
+ },
+ "gate_spawn_count": {
+  "addr": "0x40c6fc",
+  "type": "short (gates spawned; capacity = view area / 32)",
+  "refs": [
+   "game_reset",
+   "game_entity_set_col",
+   "game_physics",
+   "game_spawn_pick_wide",
+   "game_spawn_pick_speed",
+   "game_spawn_pick_narrow",
+   "game_spawn_pick_mid"
+  ]
+ },
+ "mouse_x": {
+  "addr": "0x40c700",
+  "type": "short (mouse X, set by wproc_main_aim)",
+  "refs": [
+   "wproc_main_aim"
+  ]
+ },
+ "gate_idx": {
+  "addr": "0x40c702",
+  "type": "int (gate descriptor alloc index; cleared by game_gate_idx_reset)",
+  "refs": [
+   "game_gate_idx_reset",
+   "game_gate_list_add"
+  ]
+ },
+ "player_y": {
+  "addr": "0x40c704",
+  "type": "short (player screen Y / view center Y)",
+  "refs": [
+   "game_level_init",
+   "game_create_windows",
+   "game_entity_rect_calc",
+   "game_set_center",
+   "game_spawn_pos",
+   "wproc_main_aim"
+  ]
+ },
+ "resume_tick": {
+  "addr": "0x40c708",
+  "type": "DWORD tick (tick at last resume; saved by game_tick)",
+  "refs": [
+   "game_tick",
+   "game_style_ss",
+   "game_style_gs"
+  ]
+ },
+ "mouse_y": {
+  "addr": "0x40c70c",
+  "type": "short (mouse Y, set by wproc_main_aim)",
+  "refs": [
+   "wproc_main_aim"
+  ]
+ },
+ "mask_dc_big": {
+  "addr": "0x40c710",
+  "type": "HDC (mask DC for sprite columns >= 0x21)",
+  "refs": [
+   "wproc_main_create",
+   "game_sprites_load",
+   "wproc_main_destroy"
+  ]
+ },
+ "spawn_x_cursor": {
+  "addr": "0x40c714",
+  "type": "int (spawn X cursor, step 0x3c; zeroed by game_reset)",
+  "refs": [
+   "game_reset",
+   "game_physics"
+  ]
+ },
+ "wave_res_4": {
+  "addr": "0x40c718",
+  "type": "WAVE pair {HGLOBAL, void*} (resource id 4)",
+  "refs": [
+   "game_create_windows",
+   "snd_shutdown",
+   "game_entity_activate"
+  ]
+ },
+ "gate_list_head": {
+  "addr": "0x40c720",
+  "type": "pointer (gate list head)",
+  "refs": [
+   "game_level_init",
+   "game_physics"
+  ]
+ },
+ "player_ptr": {
+  "addr": "0x40c72c",
+  "type": "entity* (player pointer, set by game_start)",
+  "refs": [
+   "game_reset",
+   "game_start",
+   "game_gate_cruise",
+   "draw_status_values",
+   "game_entity_reap",
+   "game_physics",
+   "wproc_main_input",
+   "wproc_main_aim",
+   "wproc_main_turn",
+   "wproc_main_key",
+   "game_style_ss",
+   "game_player_face",
+   "game_style_fs",
+   "game_style_gs",
+   "game_collide"
+  ]
+ },
+ "offscreen_dc": {
+  "addr": "0x40c730",
+  "type": "HDC (offscreen DC, CreateCompatibleDC in game_sprites_load)",
+  "refs": [
+   "wproc_main_create",
+   "game_sprites_load",
+   "wproc_main_destroy"
+  ]
+ },
+ "gate_array_4": {
+  "addr": "0x40c738",
+  "type": "pointer (gate array 4)",
+  "refs": [
+   "game_level_init",
+   "game_physics"
+  ]
+ },
+ "freelist_head": {
+  "addr": "0x40c744",
+  "type": "entity* (free entity list head)",
+  "refs": [
+   "game_freelist_init",
+   "game_entity_alloc",
+   "game_entity_reap"
+  ]
+ },
+ "view_area": {
+  "addr": "0x40c748",
+  "type": "int (view area; gate spawn capacity = view area / 32)",
+  "refs": [
+   "wproc_main_size",
+   "game_spawn_pick_wide",
+   "game_spawn_pick_speed",
+   "game_spawn_pick_narrow",
+   "game_spawn_pick_mid"
+  ]
+ },
+ "vert_res": {
+  "addr": "0x40c74c",
+  "type": "int (GetDeviceCaps VERTRES, set by game_create_windows)",
+  "refs": [
+   "game_create_windows"
+  ]
+ },
+ "wave_res_5": {
+  "addr": "0x40c750",
+  "type": "WAVE pair {HGLOBAL, void*} (resource id 5)",
+  "refs": [
+   "game_create_windows",
+   "snd_shutdown",
+   "game_collide"
+  ]
+ },
+ "gate_desc_mem": {
+  "addr": "0x40c758",
+  "type": "pointer (LocalAlloc 0x2400 = 100 x 36B gate descriptors)",
+  "refs": [
+   "game_init_mem",
+   "game_gate_list_add"
+  ]
+ },
+ "mask_bitmap_1x1": {
+  "addr": "0x40c75c",
+  "type": "HGDIOBJ (1x1 bitmap selected in c6ec to clear the mask)",
+  "refs": [
+   "wproc_main_create",
+   "game_sprites_load",
+   "wproc_main_destroy"
+  ]
+ },
+ "mouse_active": {
+  "addr": "0x40c760",
+  "type": "int flag (mouse aiming active; set by wproc_main_aim)",
+  "refs": [
+   "wproc_main_size",
+   "wproc_main_aim"
+  ]
+ },
+ "wave_res_2": {
+  "addr": "0x40c768",
+  "type": "WAVE pair {HGLOBAL, void*} (resource id 2)",
+  "refs": [
+   "game_create_windows",
+   "snd_shutdown",
+   "game_collide"
+  ]
+ },
+ "running": {
+  "addr": "0x40c770",
+  "type": "int flag (game running; used by game_pause_auto)",
+  "refs": [
+   "game_create_windows",
+   "game_pause_auto"
+  ]
+ },
+ "status_rect": {
+  "addr": "0x40c778",
+  "type": "short[4] (status window RECT, FrameRect in wproc_status_paint)",
+  "refs": [
+   "wproc_status",
+   "wproc_status_paint"
+  ]
+ },
+ "default_scores": {
+  "addr": "0x40c788",
+  "type": "char[64] (zeroed; default high-score string AND initial SkiStatus window text)",
+  "refs": [
+   "game_create_windows",
+   "score_show"
+  ]
+ },
+ "sound_module": {
+  "addr": "0x40c78c",
+  "type": "HMODULE (sound library handle; FreeLibrary in snd_shutdown)",
+  "refs": [
+   "snd_shutdown"
+  ]
+ },
+ "snd_play_ptr": {
+  "addr": "0x40c790",
+  "type": "code* (pointer to sndPlaySoundA, set by snd_init)",
+  "refs": [
+   "snd_init",
+   "snd_shutdown",
+   "snd_play"
+  ]
+ },
+ "sound_disabled": {
+  "addr": "0x40c794",
+  "type": "int flag (1 when \"nosound\" was on the command line)",
+  "refs": [
+   "main_winmain",
+   "game_create_windows",
+   "snd_shutdown",
+   "snd_play"
+  ]
+ },
+ "timer_proc": {
+  "addr": "0x40c940",
+  "type": "code* (SetTimer callback -> LAB_004047c0, NOT in the 163 decompiled fns)",
+  "refs": [
+   "game_resume",
+   "game_create_windows"
+  ],
+  "note": "target LAB_004047c0-0x4047e0 is not among the 163 decompiled functions"
+ },
+ "style_dist": {
+  "addr": "0x40c944",
+  "type": "int (style distance accumulator; zeroed by game_reset)",
+  "refs": [
+   "game_reset",
+   "draw_status_values",
+   "game_style_ss",
+   "game_style_gs"
+  ]
+ },
+ "style_start_tick": {
+  "addr": "0x40c948",
+  "type": "DWORD tick (style timing start)",
+  "refs": [
+   "game_resume",
+   "game_style_ss",
+   "game_style_gs"
+  ]
+ },
+ "style_acc1": {
+  "addr": "0x40c94c",
+  "type": "int (style accumulator; zeroed by game_reset)",
+  "refs": [
+   "game_level_init",
+   "game_style_ss"
+  ]
+ },
+ "style_acc2": {
+  "addr": "0x40c950",
+  "type": "int (style accumulator)",
+  "refs": [
+   "game_level_init",
+   "game_style_gs"
+  ]
+ },
+ "fs_flag": {
+  "addr": "0x40c954",
+  "type": "int (FS bonus flag)",
+  "refs": [
+   "game_level_init",
+   "draw_status_values",
+   "game_style_fs",
+   "score_add"
+  ]
+ },
+ "style_active1": {
+  "addr": "0x40c958",
+  "type": "int (style active flag; zeroed by game_reset)",
+  "refs": [
+   "game_reset",
+   "game_resume",
+   "draw_status_values",
+   "game_style_gs"
+  ]
+ },
+ "style_active2": {
+  "addr": "0x40c95c",
+  "type": "int (style active flag; zeroed by game_reset)",
+  "refs": [
+   "game_reset",
+   "game_resume",
+   "draw_status_values",
+   "game_style_ss"
+  ]
+ },
+ "style_state1": {
+  "addr": "0x40c960",
+  "type": "int (style state; zeroed by game_reset)",
+  "refs": [
+   "game_reset",
+   "game_style_gs"
+  ]
+ },
+ "style_state2": {
+  "addr": "0x40c964",
+  "type": "int (style state; zeroed by game_reset)",
+  "refs": [
+   "game_reset",
+   "game_style_ss"
+  ]
+ },
+ "style_state3": {
+  "addr": "0x40c968",
+  "type": "int (style state)",
+  "refs": [
+   "game_level_init",
+   "game_style_fs"
+  ]
+ },
+ "wave_resources": {
+  "addr": "0x40d000",
+  "type": "9 RT_WAVE resources (ids 1-9) in .rsrc",
+  "refs": [
+   "snd_load_wave"
+  ],
+  "note": "loaded at startup into pairs (HGLOBAL, pData): id1->c6c0 id2->c768 id3->c5d0 id4->c718 id5->c750 id6->c628 id9->c6f0 id7->c6e0 id8->c608"
+ },
+ "icon_resources": {
+  "addr": "0x40e302",
+  "type": "RT_ICON/RT_GROUP_ICON 'ICONSKI' / 'ICONSKI2' (iconSki resource, c120)",
+  "refs": [
+   "game_create_windows"
+  ]
+ },
+ "rt_string_table": {
+  "addr": "0x41c718",
+  "type": "RT_STRING resource (id 1) — STRINGTABLE, 17 length-prefixed UTF-16 entries, 364 bytes",
+  "refs": [
+   "main_winmain",
+   "draw_status_values",
+   "util_fmt_time",
+   "score_show",
+   "util_fatal_msg",
+   "game_pause_toggle",
+   "wproc_status_paint",
+   "wproc_status_create"
+  ],
+  "note": "ids: 1=SkiFree 2='Ski Paused ... Press F3 to continue' 3=Time: 4=Dist: 5=Speed: 6=Style: 7=00:00:00.00 8=' 0000m' 9=' 0000m/s' 10=0000000 11=%2u:%2.2u:%2.2u.%2.2u 12=%5.2dm 13=%5.2dm/s 14=%7ld 15=High Scores 16=' <-- that\\u2019s you!' 17=' <-- try again!'"
+ }
+}

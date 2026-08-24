@@ -1,165 +1,1770 @@
 [
-{"name":"FUN_00401000","addr":4198400,"size":96,"file":"FUN_00401000.c"},
-{"name":"FUN_00401060","addr":4198496,"size":476,"file":"FUN_00401060.c"},
-{"name":"FUN_00401240","addr":4198976,"size":47,"file":"FUN_00401240.c"},
-{"name":"FUN_00401270","addr":4199024,"size":30,"file":"FUN_00401270.c"},
-{"name":"FUN_00401290","addr":4199056,"size":95,"file":"FUN_00401290.c"},
-{"name":"FUN_004012f0","addr":4199152,"size":95,"file":"FUN_004012f0.c"},
-{"name":"FUN_00401350","addr":4199248,"size":52,"file":"FUN_00401350.c"},
-{"name":"FUN_00401390","addr":4199312,"size":117,"file":"FUN_00401390.c"},
-{"name":"FUN_00401410","addr":4199440,"size":146,"file":"FUN_00401410.c"},
-{"name":"FUN_004014b0","addr":4199600,"size":143,"file":"FUN_004014b0.c"},
-{"name":"FUN_00401540","addr":4199744,"size":1058,"file":"FUN_00401540.c"},
-{"name":"FUN_00401970","addr":4200816,"size":240,"file":"FUN_00401970.c"},
-{"name":"FUN_00401a60","addr":4201056,"size":180,"file":"FUN_00401a60.c"},
-{"name":"FUN_00401b20","addr":4201248,"size":96,"file":"FUN_00401b20.c"},
-{"name":"FUN_00401b80","addr":4201344,"size":354,"file":"FUN_00401b80.c"},
-{"name":"FUN_00401cf0","addr":4201712,"size":123,"file":"FUN_00401cf0.c"},
-{"name":"FUN_00401d70","addr":4201840,"size":174,"file":"FUN_00401d70.c"},
-{"name":"FUN_00401e20","addr":4202016,"size":42,"file":"FUN_00401e20.c"},
-{"name":"FUN_00401e50","addr":4202064,"size":607,"file":"FUN_00401e50.c"},
-{"name":"FUN_004020b0","addr":4202672,"size":23,"file":"FUN_004020b0.c"},
-{"name":"FUN_004020d0","addr":4202704,"size":78,"file":"FUN_004020d0.c"},
-{"name":"FUN_00402120","addr":4202784,"size":96,"file":"FUN_00402120.c"},
-{"name":"FUN_00402180","addr":4202880,"size":152,"file":"FUN_00402180.c"},
-{"name":"FUN_00402220","addr":4203040,"size":86,"file":"FUN_00402220.c"},
-{"name":"FUN_00402280","addr":4203136,"size":130,"file":"FUN_00402280.c"},
-{"name":"FUN_00402310","addr":4203280,"size":21,"file":"FUN_00402310.c"},
-{"name":"FUN_00402330","addr":4203312,"size":22,"file":"FUN_00402330.c"},
-{"name":"FUN_00402350","addr":4203344,"size":58,"file":"FUN_00402350.c"},
-{"name":"FUN_00402390","addr":4203408,"size":216,"file":"FUN_00402390.c"},
-{"name":"FUN_00402470","addr":4203632,"size":126,"file":"FUN_00402470.c"},
-{"name":"FUN_004024f0","addr":4203760,"size":192,"file":"FUN_004024f0.c"},
-{"name":"FUN_004025c0","addr":4203968,"size":213,"file":"FUN_004025c0.c"},
-{"name":"FUN_004026a0","addr":4204192,"size":78,"file":"FUN_004026a0.c"},
-{"name":"FUN_004026f0","addr":4204272,"size":122,"file":"FUN_004026f0.c"},
-{"name":"FUN_00402770","addr":4204400,"size":37,"file":"FUN_00402770.c"},
-{"name":"FUN_004027a0","addr":4204448,"size":52,"file":"FUN_004027a0.c"},
-{"name":"FUN_004027e0","addr":4204512,"size":100,"file":"FUN_004027e0.c"},
-{"name":"FUN_00402850","addr":4204624,"size":118,"file":"FUN_00402850.c"},
-{"name":"FUN_004028e0","addr":4204768,"size":584,"file":"FUN_004028e0.c"},
-{"name":"FUN_00402ba0","addr":4205472,"size":58,"file":"FUN_00402ba0.c"},
-{"name":"FUN_00402be0","addr":4205536,"size":125,"file":"FUN_00402be0.c"},
-{"name":"FUN_00402c60","addr":4205664,"size":452,"file":"FUN_00402c60.c"},
-{"name":"FUN_00402e30","addr":4206128,"size":66,"file":"FUN_00402e30.c"},
-{"name":"FUN_00402e80","addr":4206208,"size":56,"file":"FUN_00402e80.c"},
-{"name":"FUN_00402ec0","addr":4206272,"size":619,"file":"FUN_00402ec0.c"},
-{"name":"FUN_00403130","addr":4206896,"size":66,"file":"FUN_00403130.c"},
-{"name":"FUN_00403180","addr":4206976,"size":207,"file":"FUN_00403180.c"},
-{"name":"FUN_00403250","addr":4207184,"size":452,"file":"FUN_00403250.c"},
-{"name":"FUN_00403420","addr":4207648,"size":16,"file":"FUN_00403420.c"},
-{"name":"FUN_00403430","addr":4207664,"size":259,"file":"FUN_00403430.c"},
-{"name":"FUN_00403540","addr":4207936,"size":201,"file":"FUN_00403540.c"},
-{"name":"FUN_00403610","addr":4208144,"size":289,"file":"FUN_00403610.c"},
-{"name":"FUN_00403750","addr":4208464,"size":92,"file":"FUN_00403750.c"},
-{"name":"FUN_004037b0","addr":4208560,"size":331,"file":"FUN_004037b0.c"},
-{"name":"FUN_00403910","addr":4208912,"size":231,"file":"FUN_00403910.c"},
-{"name":"FUN_00403a00","addr":4209152,"size":1492,"file":"FUN_00403a00.c"},
-{"name":"FUN_00404070","addr":4210800,"size":33,"file":"FUN_00404070.c"},
-{"name":"FUN_004040a0","addr":4210848,"size":129,"file":"FUN_004040a0.c"},
-{"name":"FUN_00404130","addr":4210992,"size":138,"file":"FUN_00404130.c"},
-{"name":"FUN_004041c0","addr":4211136,"size":194,"file":"FUN_004041c0.c"},
-{"name":"FUN_00404290","addr":4211344,"size":177,"file":"FUN_00404290.c"},
-{"name":"FUN_00404350","addr":4211536,"size":883,"file":"FUN_00404350.c"},
-{"name":"FUN_004046e0","addr":4212448,"size":222,"file":"FUN_004046e0.c"},
-{"name":"FUN_004047e0","addr":4212704,"size":213,"file":"FUN_004047e0.c"},
-{"name":"FUN_004048c0","addr":4212928,"size":138,"file":"FUN_004048c0.c"},
-{"name":"FUN_00404950","addr":4213072,"size":27,"file":"FUN_00404950.c"},
-{"name":"FUN_00404970","addr":4213104,"size":143,"file":"FUN_00404970.c"},
-{"name":"FUN_00404a00","addr":4213248,"size":100,"file":"FUN_00404a00.c"},
-{"name":"FUN_00404a70","addr":4213360,"size":10,"file":"FUN_00404a70.c"},
-{"name":"FUN_00404a80","addr":4213376,"size":71,"file":"FUN_00404a80.c"},
-{"name":"FUN_00404ad0","addr":4213456,"size":128,"file":"FUN_00404ad0.c"},
-{"name":"FUN_00404b50","addr":4213584,"size":1448,"file":"FUN_00404b50.c"},
-{"name":"FUN_00405100","addr":4215040,"size":30,"file":"FUN_00405100.c"},
-{"name":"FUN_00405120","addr":4215072,"size":187,"file":"FUN_00405120.c"},
-{"name":"FUN_004051e0","addr":4215264,"size":226,"file":"FUN_004051e0.c"},
-{"name":"FUN_004052d0","addr":4215504,"size":842,"file":"FUN_004052d0.c"},
-{"name":"FUN_00405620","addr":4216352,"size":20,"file":"FUN_00405620.c"},
-{"name":"FUN_00405640","addr":4216384,"size":83,"file":"FUN_00405640.c"},
-{"name":"FUN_004056a0","addr":4216480,"size":131,"file":"FUN_004056a0.c"},
-{"name":"FUN_00405730","addr":4216624,"size":38,"file":"FUN_00405730.c"},
-{"name":"FUN_00405760","addr":4216672,"size":89,"file":"FUN_00405760.c"},
-{"name":"FUN_004057c0","addr":4216768,"size":52,"file":"FUN_004057c0.c"},
-{"name":"FUN_00405a10","addr":4217360,"size":48,"file":"FUN_00405a10.c"},
-{"name":"FUN_00405a40","addr":4217408,"size":111,"file":"FUN_00405a40.c"},
-{"name":"FUN_00405ab0","addr":4217520,"size":996,"file":"FUN_00405ab0.c"},
-{"name":"FUN_00405ea0","addr":4218528,"size":20,"file":"FUN_00405ea0.c"},
-{"name":"FUN_00405ec0","addr":4218560,"size":214,"file":"FUN_00405ec0.c"},
-{"name":"FUN_00405fa0","addr":4218784,"size":179,"file":"FUN_00405fa0.c"},
-{"name":"FUN_00406060","addr":4218976,"size":73,"file":"FUN_00406060.c"},
-{"name":"FUN_004060b0","addr":4219056,"size":71,"file":"FUN_004060b0.c"},
-{"name":"FUN_00406100","addr":4219136,"size":112,"file":"FUN_00406100.c"},
-{"name":"FUN_00406170","addr":4219248,"size":565,"file":"FUN_00406170.c"},
-{"name":"FUN_00406500","addr":4220160,"size":76,"file":"FUN_00406500.c"},
-{"name":"FUN_00406550","addr":4220240,"size":136,"file":"FUN_00406550.c"},
-{"name":"FUN_004065e0","addr":4220384,"size":132,"file":"FUN_004065e0.c"},
-{"name":"FUN_00406670","addr":4220528,"size":85,"file":"FUN_00406670.c"},
-{"name":"FUN_004066d0","addr":4220624,"size":148,"file":"FUN_004066d0.c"},
-{"name":"FUN_00406780","addr":4220800,"size":203,"file":"FUN_00406780.c"},
-{"name":"FUN_00406890","addr":4221072,"size":58,"file":"FUN_00406890.c"},
-{"name":"FUN_004068d0","addr":4221136,"size":119,"file":"FUN_004068d0.c"},
-{"name":"FUN_00406970","addr":4221296,"size":253,"file":"FUN_00406970.c"},
-{"name":"FUN_00406a70","addr":4221552,"size":480,"file":"FUN_00406a70.c"},
-{"name":"FUN_00406c50","addr":4222032,"size":47,"file":"FUN_00406c50.c"},
-{"name":"FUN_00406c80","addr":4222080,"size":65,"file":"FUN_00406c80.c"},
-{"name":"FUN_00406cd0","addr":4222160,"size":10,"file":"FUN_00406cd0.c"},
-{"name":"FUN_00406cda","addr":4222170,"size":30,"file":"FUN_00406cda.c"},
-{"name":"FUN_00406cf8","addr":4222200,"size":139,"file":"FUN_00406cf8.c"},
-{"name":"entry","addr":4222339,"size":235,"file":"FUN_00406d83.c"},
-{"name":"FUN_00406e79","addr":4222585,"size":34,"file":"FUN_00406e79.c"},
-{"name":"FUN_00406e9e","addr":4222622,"size":35,"file":"FUN_00406e9e.c"},
-{"name":"FUN_00406ec2","addr":4222658,"size":117,"file":"FUN_00406ec2.c"},
-{"name":"FUN_00406f74","addr":4222836,"size":45,"file":"FUN_00406f74.c"},
-{"name":"FUN_00406fa1","addr":4222881,"size":17,"file":"FUN_00406fa1.c"},
-{"name":"__exit","addr":4222898,"size":17,"file":"FUN_00406fb2.c"},
-{"name":"FUN_00406fc3","addr":4222915,"size":153,"file":"FUN_00406fc3.c"},
-{"name":"FUN_0040705c","addr":4223068,"size":26,"file":"FUN_0040705c.c"},
-{"name":"FUN_00407076","addr":4223094,"size":321,"file":"FUN_00407076.c"},
-{"name":"FUN_004071b7","addr":4223415,"size":67,"file":"FUN_004071b7.c"},
-{"name":"FUN_004071fa","addr":4223482,"size":88,"file":"FUN_004071fa.c"},
-{"name":"FUN_00407252","addr":4223570,"size":185,"file":"FUN_00407252.c"},
-{"name":"FUN_0040730b","addr":4223755,"size":153,"file":"FUN_0040730b.c"},
-{"name":"FUN_004073a4","addr":4223908,"size":436,"file":"FUN_004073a4.c"},
-{"name":"FUN_00407558","addr":4224344,"size":306,"file":"FUN_00407558.c"},
-{"name":"FUN_0040768a","addr":4224650,"size":427,"file":"FUN_0040768a.c"},
-{"name":"FUN_00407835","addr":4225077,"size":60,"file":"FUN_00407835.c"},
-{"name":"__global_unwind2","addr":4225140,"size":32,"file":"FUN_00407874.c"},
-{"name":"__local_unwind2","addr":4225206,"size":104,"file":"FUN_004078b6.c"},
-{"name":"FUN_0040794a","addr":4225354,"size":24,"file":"FUN_0040794a.c"},
-{"name":"FUN_00407a29","addr":4225577,"size":27,"file":"FUN_00407a29.c"},
-{"name":"FUN_00407a44","addr":4225604,"size":57,"file":"FUN_00407a44.c"},
-{"name":"FUN_00407a7d","addr":4225661,"size":339,"file":"FUN_00407a7d.c"},
-{"name":"FUN_00407bd0","addr":4226000,"size":318,"file":"FUN_00407bd0.c"},
-{"name":"FUN_00407d19","addr":4226329,"size":17,"file":"FUN_00407d19.c"},
-{"name":"FUN_00407d2a","addr":4226346,"size":49,"file":"FUN_00407d2a.c"},
-{"name":"FUN_00407d5b","addr":4226395,"size":409,"file":"FUN_00407d5b.c"},
-{"name":"FUN_00407ef4","addr":4226804,"size":74,"file":"FUN_00407ef4.c"},
-{"name":"FUN_00407f3e","addr":4226878,"size":51,"file":"FUN_00407f3e.c"},
-{"name":"FUN_00407f71","addr":4226929,"size":41,"file":"FUN_00407f71.c"},
-{"name":"FUN_00407f9a","addr":4226970,"size":389,"file":"FUN_00407f9a.c"},
-{"name":"FUN_0040811f","addr":4227359,"size":28,"file":"FUN_0040811f.c"},
-{"name":"FUN_0040813b","addr":4227387,"size":47,"file":"FUN_0040813b.c"},
-{"name":"FUN_00408170","addr":4227440,"size":7,"file":"FUN_00408170.c"},
-{"name":"FUN_00408180","addr":4227456,"size":224,"file":"FUN_00408180.c"},
-{"name":"_malloc","addr":4227680,"size":18,"file":"FUN_00408260.c"},
-{"name":"__nh_malloc","addr":4227698,"size":44,"file":"FUN_00408272.c"},
-{"name":"FUN_0040829e","addr":4227742,"size":54,"file":"FUN_0040829e.c"},
-{"name":"_strlen","addr":4227808,"size":123,"file":"FUN_004082e0.c"},
-{"name":"FUN_00408360","addr":4227936,"size":664,"file":"FUN_00408360.c"},
-{"name":"FUN_00408695","addr":4228757,"size":62,"file":"FUN_00408695.c"},
-{"name":"FUN_004086d3","addr":4228819,"size":43,"file":"FUN_004086d3.c"},
-{"name":"FUN_004086fe","addr":4228862,"size":811,"file":"FUN_004086fe.c"},
-{"name":"FUN_00408a29","addr":4229673,"size":777,"file":"FUN_00408a29.c"},
-{"name":"FUN_00408d32","addr":4230450,"size":177,"file":"FUN_00408d32.c"},
-{"name":"FUN_00408de3","addr":4230627,"size":251,"file":"FUN_00408de3.c"},
-{"name":"FUN_00408ede","addr":4230878,"size":137,"file":"FUN_00408ede.c"},
-{"name":"_strncpy","addr":4231024,"size":254,"file":"FUN_00408f70.c"},
-{"name":"_memset","addr":4231280,"size":88,"file":"FUN_00409070.c"},
-{"name":"FUN_004090d0","addr":4231376,"size":47,"file":"FUN_004090d0.c"},
-{"name":"FUN_004090ff","addr":4231423,"size":511,"file":"FUN_004090ff.c"},
-{"name":"FUN_00409323","addr":4231971,"size":43,"file":"FUN_00409323.c"},
-{"name":"FUN_0040934e","addr":4232014,"size":27,"file":"FUN_0040934e.c"},
-{"name":"FUN_00409370","addr":4232048,"size":664,"file":"FUN_00409370.c"},
-{"name":"RtlUnwind","addr":4232870,"size":6,"file":"FUN_004096a6.c"}
+ {
+  "name": "game_tick",
+  "addr": 4198400,
+  "size": 96,
+  "file": "FUN_00401000.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5d",
+   "c5f",
+   "c61",
+   "c63",
+   "c69",
+   "c6b",
+   "c6c",
+   "c70"
+  ],
+  "ghidra_name": "FUN_00401000"
+ },
+ {
+  "name": "game_render",
+  "addr": 4198496,
+  "size": 476,
+  "file": "FUN_00401060.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c61"
+  ],
+  "ghidra_name": "FUN_00401060"
+ },
+ {
+  "name": "util_assert",
+  "addr": 4198976,
+  "size": 47,
+  "file": "FUN_00401240.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00401240"
+ },
+ {
+  "name": "util_assert_box",
+  "addr": 4199024,
+  "size": 30,
+  "file": "FUN_00401270.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c6c"
+  ],
+  "ghidra_name": "FUN_00401270"
+ },
+ {
+  "name": "util_rect_overlap",
+  "addr": 4199056,
+  "size": 95,
+  "file": "FUN_00401290.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00401290"
+ },
+ {
+  "name": "util_rect_equal",
+  "addr": 4199152,
+  "size": 95,
+  "file": "FUN_004012f0.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_004012f0"
+ },
+ {
+  "name": "game_entity_die",
+  "addr": 4199248,
+  "size": 52,
+  "file": "FUN_00401350.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00401350"
+ },
+ {
+  "name": "game_entity_reap",
+  "addr": 4199312,
+  "size": 117,
+  "file": "FUN_00401390.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c61",
+   "c64",
+   "c72",
+   "c74"
+  ],
+  "ghidra_name": "FUN_00401390"
+ },
+ {
+  "name": "game_entity_rect",
+  "addr": 4199440,
+  "size": 146,
+  "file": "FUN_00401410.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f"
+  ],
+  "ghidra_name": "FUN_00401410"
+ },
+ {
+  "name": "game_entity_rect_calc",
+  "addr": 4199600,
+  "size": 143,
+  "file": "FUN_004014b0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f",
+   "c64",
+   "c70"
+  ],
+  "ghidra_name": "FUN_004014b0"
+ },
+ {
+  "name": "draw_entity",
+  "addr": 4199744,
+  "size": 1058,
+  "file": "FUN_00401540.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00401540"
+ },
+ {
+  "name": "draw_offscreen_resize",
+  "addr": 4200816,
+  "size": 240,
+  "file": "FUN_00401970.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c61",
+   "c63",
+   "c69",
+   "c6e"
+  ],
+  "ghidra_name": "FUN_00401970"
+ },
+ {
+  "name": "game_group_merge",
+  "addr": 4201056,
+  "size": 180,
+  "file": "FUN_00401a60.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00401a60"
+ },
+ {
+  "name": "game_bbox_expand",
+  "addr": 4201248,
+  "size": 96,
+  "file": "FUN_00401b20.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00401b20"
+ },
+ {
+  "name": "draw_status_values",
+  "addr": 4201344,
+  "size": 354,
+  "file": "FUN_00401b80.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5d",
+   "c5f",
+   "c66",
+   "c69",
+   "c6a",
+   "c72",
+   "c94",
+   "c95"
+  ],
+  "ghidra_name": "FUN_00401b80"
+ },
+ {
+  "name": "util_str_cache",
+  "addr": 4201712,
+  "size": 123,
+  "file": "FUN_00401cf0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c61",
+   "c67"
+  ],
+  "ghidra_name": "FUN_00401cf0"
+ },
+ {
+  "name": "util_fmt_time",
+  "addr": 4201840,
+  "size": 174,
+  "file": "FUN_00401d70.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00401d70"
+ },
+ {
+  "name": "draw_text_line",
+  "addr": 4202016,
+  "size": 42,
+  "file": "FUN_00401e20.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c66"
+  ],
+  "ghidra_name": "FUN_00401e20"
+ },
+ {
+  "name": "game_physics",
+  "addr": 4202064,
+  "size": 607,
+  "file": "FUN_00401e50.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5d",
+   "c5f",
+   "c61",
+   "c63",
+   "c64",
+   "c65",
+   "c68",
+   "c6f",
+   "c71",
+   "c72",
+   "c73"
+  ],
+  "ghidra_name": "FUN_00401e50"
+ },
+ {
+  "name": "util_rand_range",
+  "addr": 4202672,
+  "size": 23,
+  "file": "FUN_004020b0.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_004020b0"
+ },
+ {
+  "name": "game_entity_new",
+  "addr": 4202704,
+  "size": 78,
+  "file": "FUN_004020d0.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_004020d0"
+ },
+ {
+  "name": "game_entity_set_frame",
+  "addr": 4202784,
+  "size": 96,
+  "file": "FUN_00402120.c",
+  "class": "GAME",
+  "dat_refs": [
+   "a1a"
+  ],
+  "ghidra_name": "FUN_00402120"
+ },
+ {
+  "name": "game_entity_set_col",
+  "addr": 4202880,
+  "size": 152,
+  "file": "FUN_00402180.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f",
+   "c6f"
+  ],
+  "ghidra_name": "FUN_00402180"
+ },
+ {
+  "name": "game_group_split",
+  "addr": 4203040,
+  "size": 86,
+  "file": "FUN_00402220.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00402220"
+ },
+ {
+  "name": "game_entity_alloc",
+  "addr": 4203136,
+  "size": 130,
+  "file": "FUN_00402280.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c61",
+   "c74"
+  ],
+  "ghidra_name": "FUN_00402280"
+ },
+ {
+  "name": "util_frame_special",
+  "addr": 4203280,
+  "size": 21,
+  "file": "FUN_00402310.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00402310"
+ },
+ {
+  "name": "game_entity_from_template",
+  "addr": 4203312,
+  "size": 22,
+  "file": "FUN_00402330.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c03",
+   "c04",
+   "c5f"
+  ],
+  "ghidra_name": "FUN_00402330"
+ },
+ {
+  "name": "game_spawn_dir",
+  "addr": 4203344,
+  "size": 58,
+  "file": "FUN_00402350.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00402350"
+ },
+ {
+  "name": "game_entity_set_pos",
+  "addr": 4203408,
+  "size": 216,
+  "file": "FUN_00402390.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c64"
+  ],
+  "ghidra_name": "FUN_00402390"
+ },
+ {
+  "name": "game_world_shift",
+  "addr": 4203632,
+  "size": 126,
+  "file": "FUN_00402470.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f",
+   "c61",
+   "c64"
+  ],
+  "ghidra_name": "FUN_00402470"
+ },
+ {
+  "name": "game_spawn_pos",
+  "addr": 4203760,
+  "size": 192,
+  "file": "FUN_004024f0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f",
+   "c64",
+   "c6b",
+   "c6d",
+   "c70"
+  ],
+  "ghidra_name": "FUN_004024f0"
+ },
+ {
+  "name": "game_spawn",
+  "addr": 4203968,
+  "size": 213,
+  "file": "FUN_004025c0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "a22"
+  ],
+  "ghidra_name": "FUN_004025c0"
+ },
+ {
+  "name": "game_entity_new_col",
+  "addr": 4204192,
+  "size": 78,
+  "file": "FUN_004026a0.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_004026a0"
+ },
+ {
+  "name": "game_spawn_pick_wide",
+  "addr": 4204272,
+  "size": 122,
+  "file": "FUN_004026f0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c6f",
+   "c74"
+  ],
+  "ghidra_name": "FUN_004026f0"
+ },
+ {
+  "name": "game_spawn_pick_speed",
+  "addr": 4204400,
+  "size": 37,
+  "file": "FUN_00402770.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c6f",
+   "c74"
+  ],
+  "ghidra_name": "FUN_00402770"
+ },
+ {
+  "name": "game_spawn_pick_narrow",
+  "addr": 4204448,
+  "size": 52,
+  "file": "FUN_004027a0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c6f",
+   "c74"
+  ],
+  "ghidra_name": "FUN_004027a0"
+ },
+ {
+  "name": "game_spawn_pick_mid",
+  "addr": 4204512,
+  "size": 100,
+  "file": "FUN_004027e0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c6f",
+   "c74"
+  ],
+  "ghidra_name": "FUN_004027e0"
+ },
+ {
+  "name": "game_sprite_frame",
+  "addr": 4204624,
+  "size": 118,
+  "file": "FUN_00402850.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00402850"
+ },
+ {
+  "name": "game_entity_activate",
+  "addr": 4204768,
+  "size": 584,
+  "file": "FUN_004028e0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "a30",
+   "a43",
+   "c6c",
+   "c71"
+  ],
+  "ghidra_name": "FUN_004028e0"
+ },
+ {
+  "name": "snd_play",
+  "addr": 4205472,
+  "size": 58,
+  "file": "FUN_00402ba0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c79"
+  ],
+  "ghidra_name": "FUN_00402ba0"
+ },
+ {
+  "name": "game_entity_step",
+  "addr": 4205536,
+  "size": 125,
+  "file": "FUN_00402be0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c67"
+  ],
+  "ghidra_name": "FUN_00402be0"
+ },
+ {
+  "name": "game_style_ss",
+  "addr": 4205664,
+  "size": 452,
+  "file": "FUN_00402c60.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c0d",
+   "c69",
+   "c6f",
+   "c70",
+   "c72",
+   "c94",
+   "c95",
+   "c96"
+  ],
+  "ghidra_name": "FUN_00402c60"
+ },
+ {
+  "name": "util_lerp",
+  "addr": 4206128,
+  "size": 66,
+  "file": "FUN_00402e30.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00402e30"
+ },
+ {
+  "name": "game_player_face",
+  "addr": 4206208,
+  "size": 56,
+  "file": "FUN_00402e80.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c6c",
+   "c72"
+  ],
+  "ghidra_name": "FUN_00402e80"
+ },
+ {
+  "name": "score_show",
+  "addr": 4206272,
+  "size": 619,
+  "file": "FUN_00402ec0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c08",
+   "c0e",
+   "c6c",
+   "c78"
+  ],
+  "ghidra_name": "FUN_00402ec0"
+ },
+ {
+  "name": "game_gate_set_col",
+  "addr": 4206896,
+  "size": 66,
+  "file": "FUN_00403130.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f"
+  ],
+  "ghidra_name": "FUN_00403130"
+ },
+ {
+  "name": "game_style_fs",
+  "addr": 4206976,
+  "size": 207,
+  "file": "FUN_00403180.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c0f",
+   "c6a",
+   "c72",
+   "c95",
+   "c96"
+  ],
+  "ghidra_name": "FUN_00403180"
+ },
+ {
+  "name": "game_style_gs",
+  "addr": 4207184,
+  "size": 452,
+  "file": "FUN_00403250.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c0f",
+   "c69",
+   "c6f",
+   "c70",
+   "c72",
+   "c94",
+   "c95",
+   "c96"
+  ],
+  "ghidra_name": "FUN_00403250"
+ },
+ {
+  "name": "score_add",
+  "addr": 4207648,
+  "size": 16,
+  "file": "FUN_00403420.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c6a",
+   "c95"
+  ],
+  "ghidra_name": "FUN_00403420"
+ },
+ {
+  "name": "game_anim_update",
+  "addr": 4207664,
+  "size": 259,
+  "file": "FUN_00403430.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00403430"
+ },
+ {
+  "name": "game_anim_type1",
+  "addr": 4207936,
+  "size": 201,
+  "file": "FUN_00403540.c",
+  "class": "GAME",
+  "dat_refs": [
+   "a49"
+  ],
+  "ghidra_name": "FUN_00403540"
+ },
+ {
+  "name": "game_anim_type2",
+  "addr": 4208144,
+  "size": 289,
+  "file": "FUN_00403610.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c60"
+  ],
+  "ghidra_name": "FUN_00403610"
+ },
+ {
+  "name": "game_anim_type9",
+  "addr": 4208464,
+  "size": 92,
+  "file": "FUN_00403750.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00403750"
+ },
+ {
+  "name": "game_anim_type10",
+  "addr": 4208560,
+  "size": 331,
+  "file": "FUN_004037b0.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_004037b0"
+ },
+ {
+  "name": "game_anim_type3",
+  "addr": 4208912,
+  "size": 231,
+  "file": "FUN_00403910.c",
+  "class": "GAME",
+  "dat_refs": [
+   "a4e"
+  ],
+  "ghidra_name": "FUN_00403910"
+ },
+ {
+  "name": "game_collide",
+  "addr": 4209152,
+  "size": 1492,
+  "file": "FUN_00403a00.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5d",
+   "c62",
+   "c69",
+   "c6c",
+   "c6e",
+   "c72",
+   "c75",
+   "c76"
+  ],
+  "ghidra_name": "FUN_00403a00"
+ },
+ {
+  "name": "game_group_head",
+  "addr": 4210800,
+  "size": 33,
+  "file": "FUN_00404070.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00404070"
+ },
+ {
+  "name": "game_gate_update",
+  "addr": 4210848,
+  "size": 129,
+  "file": "FUN_004040a0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f",
+   "c68"
+  ],
+  "ghidra_name": "FUN_004040a0"
+ },
+ {
+  "name": "game_gate_spawn",
+  "addr": 4210992,
+  "size": 138,
+  "file": "FUN_00404130.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c68"
+  ],
+  "ghidra_name": "FUN_00404130"
+ },
+ {
+  "name": "game_gate_advance",
+  "addr": 4211136,
+  "size": 194,
+  "file": "FUN_004041c0.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_004041c0"
+ },
+ {
+  "name": "game_gate_type4",
+  "addr": 4211344,
+  "size": 177,
+  "file": "FUN_00404290.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00404290"
+ },
+ {
+  "name": "game_gate_cruise",
+  "addr": 4211536,
+  "size": 883,
+  "file": "FUN_00404350.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f",
+   "c69",
+   "c6d",
+   "c6f",
+   "c72"
+  ],
+  "ghidra_name": "FUN_00404350"
+ },
+ {
+  "name": "game_gate_scan",
+  "addr": 4212448,
+  "size": 222,
+  "file": "FUN_004046e0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f",
+   "c68"
+  ],
+  "ghidra_name": "FUN_004046e0"
+ },
+ {
+  "name": "main_winmain",
+  "addr": 4212704,
+  "size": 213,
+  "file": "FUN_004047e0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c6c",
+   "c79"
+  ],
+  "ghidra_name": "FUN_004047e0"
+ },
+ {
+  "name": "game_init_mem",
+  "addr": 4212928,
+  "size": 138,
+  "file": "FUN_004048c0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f",
+   "c64",
+   "c67",
+   "c75"
+  ],
+  "ghidra_name": "FUN_004048c0"
+ },
+ {
+  "name": "util_fatal_msg",
+  "addr": 4213072,
+  "size": 27,
+  "file": "FUN_00404950.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00404950"
+ },
+ {
+  "name": "game_reset",
+  "addr": 4213104,
+  "size": 143,
+  "file": "FUN_00404970.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5d",
+   "c5f",
+   "c61",
+   "c64",
+   "c67",
+   "c69",
+   "c6a",
+   "c6f",
+   "c71",
+   "c72",
+   "c94",
+   "c95"
+  ],
+  "ghidra_name": "FUN_00404970"
+ },
+ {
+  "name": "game_freelist_init",
+  "addr": 4213248,
+  "size": 100,
+  "file": "FUN_00404a00.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c61",
+   "c64",
+   "c74"
+  ],
+  "ghidra_name": "FUN_00404a00"
+ },
+ {
+  "name": "game_gate_idx_reset",
+  "addr": 4213360,
+  "size": 10,
+  "file": "FUN_00404a70.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c70"
+  ],
+  "ghidra_name": "FUN_00404a70"
+ },
+ {
+  "name": "game_start",
+  "addr": 4213376,
+  "size": 71,
+  "file": "FUN_00404a80.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c64",
+   "c65",
+   "c72"
+  ],
+  "ghidra_name": "FUN_00404a80"
+ },
+ {
+  "name": "game_resume",
+  "addr": 4213456,
+  "size": 128,
+  "file": "FUN_00404ad0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c60",
+   "c65",
+   "c67",
+   "c69",
+   "c6c",
+   "c6d",
+   "c94",
+   "c95"
+  ],
+  "ghidra_name": "FUN_00404ad0"
+ },
+ {
+  "name": "game_level_init",
+  "addr": 4213584,
+  "size": 1448,
+  "file": "FUN_00404b50.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f",
+   "c63",
+   "c64",
+   "c65",
+   "c6b",
+   "c70",
+   "c72",
+   "c73",
+   "c94",
+   "c95",
+   "c96"
+  ],
+  "ghidra_name": "FUN_00404b50"
+ },
+ {
+  "name": "game_gate_list_clear",
+  "addr": 4215040,
+  "size": 30,
+  "file": "FUN_00405100.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00405100"
+ },
+ {
+  "name": "game_gate_list_add",
+  "addr": 4215072,
+  "size": 187,
+  "file": "FUN_00405120.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f",
+   "c70",
+   "c75"
+  ],
+  "ghidra_name": "FUN_00405120"
+ },
+ {
+  "name": "game_startpoles_spawn",
+  "addr": 4215264,
+  "size": 226,
+  "file": "FUN_004051e0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f"
+  ],
+  "ghidra_name": "FUN_004051e0"
+ },
+ {
+  "name": "game_create_windows",
+  "addr": 4215504,
+  "size": 842,
+  "file": "FUN_004052d0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5d",
+   "c5f",
+   "c60",
+   "c61",
+   "c62",
+   "c67",
+   "c69",
+   "c6a",
+   "c6c",
+   "c6d",
+   "c6e",
+   "c6f"
+  ],
+  "ghidra_name": "FUN_004052d0"
+ },
+ {
+  "name": "snd_init",
+  "addr": 4216352,
+  "size": 20,
+  "file": "FUN_00405620.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c79"
+  ],
+  "ghidra_name": "FUN_00405620"
+ },
+ {
+  "name": "snd_load_wave",
+  "addr": 4216384,
+  "size": 83,
+  "file": "FUN_00405640.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c12",
+   "c61"
+  ],
+  "ghidra_name": "FUN_00405640"
+ },
+ {
+  "name": "snd_shutdown",
+  "addr": 4216480,
+  "size": 131,
+  "file": "FUN_004056a0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5d",
+   "c60",
+   "c62",
+   "c6c",
+   "c6e",
+   "c6f",
+   "c71",
+   "c75",
+   "c76",
+   "c78",
+   "c79"
+  ],
+  "ghidra_name": "FUN_004056a0"
+ },
+ {
+  "name": "snd_free",
+  "addr": 4216624,
+  "size": 38,
+  "file": "FUN_00405730.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00405730"
+ },
+ {
+  "name": "game_pause_toggle",
+  "addr": 4216672,
+  "size": 89,
+  "file": "FUN_00405760.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c65",
+   "c6c",
+   "c6d"
+  ],
+  "ghidra_name": "FUN_00405760"
+ },
+ {
+  "name": "game_pause",
+  "addr": 4216768,
+  "size": 52,
+  "file": "FUN_004057c0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c60",
+   "c69",
+   "c6c",
+   "c6d"
+  ],
+  "ghidra_name": "FUN_004057c0"
+ },
+ {
+  "name": "game_pause_auto",
+  "addr": 4217360,
+  "size": 48,
+  "file": "FUN_00405a10.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c67",
+   "c69",
+   "c77"
+  ],
+  "ghidra_name": "FUN_00405a10"
+ },
+ {
+  "name": "wproc_main_create",
+  "addr": 4217408,
+  "size": 111,
+  "file": "FUN_00405a40.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c61",
+   "c62",
+   "c63",
+   "c64",
+   "c6a",
+   "c6d",
+   "c6e",
+   "c71",
+   "c73",
+   "c75"
+  ],
+  "ghidra_name": "FUN_00405a40"
+ },
+ {
+  "name": "game_sprites_load",
+  "addr": 4217520,
+  "size": 996,
+  "file": "FUN_00405ab0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f",
+   "c61",
+   "c62",
+   "c64",
+   "c69",
+   "c6a",
+   "c6d",
+   "c6e",
+   "c71",
+   "c73",
+   "c75"
+  ],
+  "ghidra_name": "FUN_00405ab0"
+ },
+ {
+  "name": "util_load_bitmap",
+  "addr": 4218528,
+  "size": 20,
+  "file": "FUN_00405ea0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c61"
+  ],
+  "ghidra_name": "FUN_00405ea0"
+ },
+ {
+  "name": "wproc_main_destroy",
+  "addr": 4218560,
+  "size": 214,
+  "file": "FUN_00405ec0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c61",
+   "c62",
+   "c63",
+   "c64",
+   "c6a",
+   "c6d",
+   "c6e",
+   "c71",
+   "c73",
+   "c75"
+  ],
+  "ghidra_name": "FUN_00405ec0"
+ },
+ {
+  "name": "wproc_main_size",
+  "addr": 4218784,
+  "size": 179,
+  "file": "FUN_00405fa0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f",
+   "c68",
+   "c6b",
+   "c6d",
+   "c74",
+   "c76"
+  ],
+  "ghidra_name": "FUN_00405fa0"
+ },
+ {
+  "name": "game_set_center",
+  "addr": 4218976,
+  "size": 73,
+  "file": "FUN_00406060.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f",
+   "c61",
+   "c70"
+  ],
+  "ghidra_name": "FUN_00406060"
+ },
+ {
+  "name": "wproc_main_paint",
+  "addr": 4219056,
+  "size": 71,
+  "file": "FUN_004060b0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c69"
+  ],
+  "ghidra_name": "FUN_004060b0"
+ },
+ {
+  "name": "draw_scene",
+  "addr": 4219136,
+  "size": 112,
+  "file": "FUN_00406100.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c61"
+  ],
+  "ghidra_name": "FUN_00406100"
+ },
+ {
+  "name": "wproc_main_input",
+  "addr": 4219248,
+  "size": 565,
+  "file": "FUN_00406170.c",
+  "class": "GAME",
+  "dat_refs": [
+   "a25",
+   "c61",
+   "c63",
+   "c6b",
+   "c6c",
+   "c72"
+  ],
+  "ghidra_name": "FUN_00406170"
+ },
+ {
+  "name": "game_restart",
+  "addr": 4220160,
+  "size": 76,
+  "file": "FUN_00406500.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c65",
+   "c6c"
+  ],
+  "ghidra_name": "FUN_00406500"
+ },
+ {
+  "name": "wproc_main_aim",
+  "addr": 4220240,
+  "size": 136,
+  "file": "FUN_00406550.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c5f",
+   "c70",
+   "c72",
+   "c76"
+  ],
+  "ghidra_name": "FUN_00406550"
+ },
+ {
+  "name": "util_facing_delta",
+  "addr": 4220384,
+  "size": 132,
+  "file": "FUN_004065e0.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_004065e0"
+ },
+ {
+  "name": "util_facing_crouch",
+  "addr": 4220528,
+  "size": 85,
+  "file": "FUN_00406670.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00406670"
+ },
+ {
+  "name": "wproc_main_turn",
+  "addr": 4220624,
+  "size": 148,
+  "file": "FUN_004066d0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c61",
+   "c63",
+   "c6b",
+   "c72"
+  ],
+  "ghidra_name": "FUN_004066d0"
+ },
+ {
+  "name": "wproc_main_key",
+  "addr": 4220800,
+  "size": 203,
+  "file": "FUN_00406780.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c63",
+   "c67",
+   "c6b",
+   "c72"
+  ],
+  "ghidra_name": "FUN_00406780"
+ },
+ {
+  "name": "wproc_status_reposition",
+  "addr": 4221072,
+  "size": 58,
+  "file": "FUN_00406890.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c62",
+   "c66",
+   "c6b"
+  ],
+  "ghidra_name": "FUN_00406890"
+ },
+ {
+  "name": "wproc_status",
+  "addr": 4221136,
+  "size": 119,
+  "file": "FUN_004068d0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c77"
+  ],
+  "ghidra_name": "FUN_004068d0"
+ },
+ {
+  "name": "wproc_status_paint",
+  "addr": 4221296,
+  "size": 253,
+  "file": "FUN_00406970.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c77"
+  ],
+  "ghidra_name": "FUN_00406970"
+ },
+ {
+  "name": "wproc_status_create",
+  "addr": 4221552,
+  "size": 480,
+  "file": "FUN_00406a70.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c66",
+   "c6c"
+  ],
+  "ghidra_name": "FUN_00406a70"
+ },
+ {
+  "name": "util_text_width",
+  "addr": 4222032,
+  "size": 47,
+  "file": "FUN_00406c50.c",
+  "class": "GAME",
+  "dat_refs": [],
+  "ghidra_name": "FUN_00406c50"
+ },
+ {
+  "name": "wproc_status_destroy",
+  "addr": 4222080,
+  "size": 65,
+  "file": "FUN_00406c80.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c62",
+   "c66",
+   "c6c"
+  ],
+  "ghidra_name": "FUN_00406c80"
+ },
+ {
+  "name": "FUN_00406cd0",
+  "addr": 4222160,
+  "size": 10,
+  "file": "FUN_00406cd0.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00406cda",
+  "addr": 4222170,
+  "size": 30,
+  "file": "FUN_00406cda.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00406cf8",
+  "addr": 4222200,
+  "size": 139,
+  "file": "FUN_00406cf8.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "entry",
+  "addr": 4222339,
+  "size": 235,
+  "file": "FUN_00406d83.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00406e79",
+  "addr": 4222585,
+  "size": 34,
+  "file": "FUN_00406e79.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00406e9e",
+  "addr": 4222622,
+  "size": 35,
+  "file": "FUN_00406e9e.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00406ec2",
+  "addr": 4222658,
+  "size": 117,
+  "file": "FUN_00406ec2.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00406f74",
+  "addr": 4222836,
+  "size": 45,
+  "file": "FUN_00406f74.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00406fa1",
+  "addr": 4222881,
+  "size": 17,
+  "file": "FUN_00406fa1.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "__exit",
+  "addr": 4222898,
+  "size": 17,
+  "file": "FUN_00406fb2.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00406fc3",
+  "addr": 4222915,
+  "size": 153,
+  "file": "FUN_00406fc3.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_0040705c",
+  "addr": 4223068,
+  "size": 26,
+  "file": "FUN_0040705c.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407076",
+  "addr": 4223094,
+  "size": 321,
+  "file": "FUN_00407076.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_004071b7",
+  "addr": 4223415,
+  "size": 67,
+  "file": "FUN_004071b7.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_004071fa",
+  "addr": 4223482,
+  "size": 88,
+  "file": "FUN_004071fa.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407252",
+  "addr": 4223570,
+  "size": 185,
+  "file": "FUN_00407252.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_0040730b",
+  "addr": 4223755,
+  "size": 153,
+  "file": "FUN_0040730b.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_004073a4",
+  "addr": 4223908,
+  "size": 436,
+  "file": "FUN_004073a4.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407558",
+  "addr": 4224344,
+  "size": 306,
+  "file": "FUN_00407558.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_0040768a",
+  "addr": 4224650,
+  "size": 427,
+  "file": "FUN_0040768a.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407835",
+  "addr": 4225077,
+  "size": 60,
+  "file": "FUN_00407835.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "__global_unwind2",
+  "addr": 4225140,
+  "size": 32,
+  "file": "FUN_00407874.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "__local_unwind2",
+  "addr": 4225206,
+  "size": 104,
+  "file": "FUN_004078b6.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_0040794a",
+  "addr": 4225354,
+  "size": 24,
+  "file": "FUN_0040794a.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407a29",
+  "addr": 4225577,
+  "size": 27,
+  "file": "FUN_00407a29.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407a44",
+  "addr": 4225604,
+  "size": 57,
+  "file": "FUN_00407a44.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407a7d",
+  "addr": 4225661,
+  "size": 339,
+  "file": "FUN_00407a7d.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407bd0",
+  "addr": 4226000,
+  "size": 318,
+  "file": "FUN_00407bd0.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407d19",
+  "addr": 4226329,
+  "size": 17,
+  "file": "FUN_00407d19.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407d2a",
+  "addr": 4226346,
+  "size": 49,
+  "file": "FUN_00407d2a.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407d5b",
+  "addr": 4226395,
+  "size": 409,
+  "file": "FUN_00407d5b.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407ef4",
+  "addr": 4226804,
+  "size": 74,
+  "file": "FUN_00407ef4.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407f3e",
+  "addr": 4226878,
+  "size": 51,
+  "file": "FUN_00407f3e.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407f71",
+  "addr": 4226929,
+  "size": 41,
+  "file": "FUN_00407f71.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00407f9a",
+  "addr": 4226970,
+  "size": 389,
+  "file": "FUN_00407f9a.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_0040811f",
+  "addr": 4227359,
+  "size": 28,
+  "file": "FUN_0040811f.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_0040813b",
+  "addr": 4227387,
+  "size": 47,
+  "file": "FUN_0040813b.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00408170",
+  "addr": 4227440,
+  "size": 7,
+  "file": "FUN_00408170.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00408180",
+  "addr": 4227456,
+  "size": 224,
+  "file": "FUN_00408180.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "_malloc",
+  "addr": 4227680,
+  "size": 18,
+  "file": "FUN_00408260.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "__nh_malloc",
+  "addr": 4227698,
+  "size": 44,
+  "file": "FUN_00408272.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_0040829e",
+  "addr": 4227742,
+  "size": 54,
+  "file": "FUN_0040829e.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "_strlen",
+  "addr": 4227808,
+  "size": 123,
+  "file": "FUN_004082e0.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00408360",
+  "addr": 4227936,
+  "size": 664,
+  "file": "FUN_00408360.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00408695",
+  "addr": 4228757,
+  "size": 62,
+  "file": "FUN_00408695.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_004086d3",
+  "addr": 4228819,
+  "size": 43,
+  "file": "FUN_004086d3.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_004086fe",
+  "addr": 4228862,
+  "size": 811,
+  "file": "FUN_004086fe.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00408a29",
+  "addr": 4229673,
+  "size": 777,
+  "file": "FUN_00408a29.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00408d32",
+  "addr": 4230450,
+  "size": 177,
+  "file": "FUN_00408d32.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00408de3",
+  "addr": 4230627,
+  "size": 251,
+  "file": "FUN_00408de3.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00408ede",
+  "addr": 4230878,
+  "size": 137,
+  "file": "FUN_00408ede.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "_strncpy",
+  "addr": 4231024,
+  "size": 254,
+  "file": "FUN_00408f70.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "_memset",
+  "addr": 4231280,
+  "size": 88,
+  "file": "FUN_00409070.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_004090d0",
+  "addr": 4231376,
+  "size": 47,
+  "file": "FUN_004090d0.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_004090ff",
+  "addr": 4231423,
+  "size": 511,
+  "file": "FUN_004090ff.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00409323",
+  "addr": 4231971,
+  "size": 43,
+  "file": "FUN_00409323.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_0040934e",
+  "addr": 4232014,
+  "size": 27,
+  "file": "FUN_0040934e.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_00409370",
+  "addr": 4232048,
+  "size": 664,
+  "file": "FUN_00409370.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "RtlUnwind",
+  "addr": 4232870,
+  "size": 6,
+  "file": "FUN_004096a6.c",
+  "class": "CRT",
+  "dat_refs": []
+ }
 ]
