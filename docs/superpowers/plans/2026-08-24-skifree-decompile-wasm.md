@@ -19,6 +19,14 @@
 
 ---
 
+## Amendment — M0 findings (2026-08-24; Task 3 evidence supersedes)
+
+1. **Single window.** Under Wine the original creates exactly ONE visible X11 window: SkiMain, 760×734 px (client area = full window; no decorations on bare Xvfb). The Time/Dist/Speed/Style status panel sits *inside* the main window's client area (top-right, offset ≈(630,0), ≈128×58 px) — either a child window composited by Wine or drawn directly by the main WndProc (Task 7 decides from the code). All frame diffing therefore uses a **single stream**: original capture `cap_%07d_main.png`, rebuild dump `frame_%06d_main.ppm`, WASM canvas dump `frame_%06d_main.png` (one 760×734 canvas). Any task text below mentioning a second `_status` window/frame stream is superseded — there is no second window to capture.
+2. **Time field is static.** In the original under Wine, `Time:` stays `0:00:00.00` through an entire live run while `Dist:`/`Speed:` update per frame. This is an original property (Task 7 must explain it from the code); rebuild and WASM port must reproduce it (same logic ⇒ same pixels). No real-time leakage observed in pixels — favorable for the diff.
+3. **Ghidra 12.1.3, not 11.4.** The Task 2 pinned 11.4 URL 404s; latest release (12.1.3) installed instead (details in `harness/TOOLCHAIN.md`). All Ghidra invocations use `~/tools/ghidra_12.1.3_PUBLIC/support/analyzeHeadless` and `-processor "x86:LE:32:default"` (12.x language-ID format; the old `x86:IA32:default,little` is rejected).
+
+---
+
 ## M0 — Environment (Tasks 1–3)
 
 ### Task 1: Toolchain setup
@@ -332,7 +340,8 @@ Read the named GAME functions in `decompile/ghidra/`. Everything must be evidenc
 - [ ] **Step 1: Data model.** Document in NOTES.md:
   - Skier state (position/velocity/airtime/mode/score/style fields, byte offsets as seen in the C).
   - Obstacle/object lists (array bounds, element layout, bitmap ID per type — tie to the Task 6 inventory).
-  - Window records: what the `button`-class windows are (count, labels, handlers); `SkiMain` and `SkiStatus` contents.
+  - Window records: what the `button`-class windows are (count, labels, handlers); `SkiMain` and `SkiStatus` contents — and HOW the status panel gets onto screen: child window vs. direct draw in the main WndProc (M0 amendment 1: only ONE visible window under Wine; the panel is inside the main client area at ≈(630,0) 128×58).
+  - Status panel update code: which variable feeds `Time:` — the original under Wine shows `Time:` stuck at `0:00:00.00` through an entire live run while `Dist:`/`Speed:` update per frame (M0 amendment 2). Explain from the code why (e.g. the time source is a timer that the Wine environment doesn't fire, or a bug); the rebuild must reproduce the behavior exactly (same code ⇒ same pixels).
   - Mode model: how many modes, switch key(s), per-mode update differences, the `Style:` label's role.
   - Monster trigger (confirm the 2000 m rule from the code) and all end conditions.
   - High-score record layout + exact `entpack.ini` section/keys (from the `GetPrivateProfileStringA`/`WritePrivateProfileStringA` call sites).
@@ -516,7 +525,7 @@ Expected: `PE32 executable (GUI) Intel 80386`. (`ski_init`/`ski_run` don't exist
 
 **Source material:** the `main_*`/`wproc_*` functions from Task 5.
 
-- [ ] **Step 1: Reconstruct `src/ski_win.c`** from the decompiled C: `RegisterClassA` ×3 (SkiMain, SkiStatus, button), `CreateWindowExA` calls (exact styles/positions/sizes — cross-check against `evidence/m0-geometry.txt`), `SetTimer` (id/period must equal `seed.json.timing.settimer_ms`), the message loop (`GetMessage`/`TranslateMessage`/`DispatchMessage`/`PostQuitMessage`), and each WndProc. File header cites the source functions + addresses, e.g.:
+- [ ] **Step 1: Reconstruct `src/ski_win.c`** from the decompiled C: `RegisterClassA` ×3 (SkiMain, SkiStatus, button), `CreateWindowExA` calls (exact styles/positions/sizes — cross-check against `evidence/m0-geometry.txt`), `SetTimer` (id/period must equal `seed.json.timing.settimer_ms`), the message loop (`GetMessage`/`TranslateMessage`/`DispatchMessage`/`PostQuitMessage`), and each WndProc. **Single-window layout (M0 amendment 1):** the rebuilt binary under Wine must show exactly one visible window, 760×734, with the status panel inside its client area — if the reconstruction produces a second visible window, it diverges from the original's observed layout; investigate before proceeding (the decompiled code is the authority; the evidence constrains the outcome). File header cites the source functions + addresses, e.g.:
 ```c
 /* Reconstructed from main_init (FUN_0040A210) + wproc_main (FUN_0040B5F0)
  * + wproc_status (FUN_0040C110) — see decompile/NOTES.md function map. */
@@ -644,7 +653,7 @@ void ski_harness_dump_dc(HWND hwnd, const char *tag)
 }
 #endif
 ```
-Add `#if SKI_HARNESS void ski_harness_dump_dc(HWND, const char *); #endif` to `ski_game.h`. At the end of each reconstructed `EndPaint` section in `src/ski_win.c` (the main and status WndProcs), call `ski_harness_dump_dc(hwnd, "main")` / `("status")` under the same guard. (Dumping from the real DC after EndPaint captures exactly what the window showed — independent of how the reconstruction did its blits.)
+Add `#if SKI_HARNESS void ski_harness_dump_dc(HWND, const char *); #endif` to `ski_game.h`. At the end of the reconstructed **main window's** `EndPaint` in `src/ski_win.c`, call `ski_harness_dump_dc(hwnd, "main")` under the same guard. **Single window only** (M0 amendment 1): the status panel is inside the main window's client area, so the main-window dump already contains it — there is no separate status dump. (Dumping from the real DC after EndPaint captures exactly what the window showed — independent of how the reconstruction did its blits.)
 - [ ] **Step 3: Write `harness/gen_input.py`:**
 ```python
 #!/usr/bin/env python3
@@ -695,7 +704,7 @@ harness/.venv/bin/python harness/gen_input.py harness/scenarios/s02_start.json \
 cmake --build build-native -j   # rebuild with SKI_HARNESS=ON (reconfigure:
                                  # cmake -B build-native-h ... -DSKI_HARNESS=ON)
 ```
-Reconfigure a harness build dir: `cmake -B build-native-h -DCMAKE_TOOLCHAIN_FILE=/usr/share/mingw-w64/i686/mingw-windows_i686.cmake -DSKI_DETERMINISTIC=ON -DSKI_HARNESS=ON`. Run: `mkdir -p harness/frames/rebuild_s02 && cd harness/frames/rebuild_s02 && cp /tmp/ski_in.bin . && WINEPREFIX=$HOME/.wine-ski xvfb-run -a -s "-screen 0 1024x768x24" wine <repo>/build-native-h/ski.exe` — wait ~30s, kill, then: `ls | head` shows `frame_000000_main.ppm`, `frame_000000_status.ppm`, …; `harness/.venv/bin/python -c "from PIL import Image; im=Image.open(sorted(__import__('glob').glob('frame_*_main.ppm'))[100]); im.save('/tmp/check.png'); print(im.size)"`. Expected: PPM frames exist, readable by Pillow, window-sized (matches Task 3 geometry). Commit: `git add src/ harness/gen_input.py && git commit -m "M2: rebuild-side deterministic input + per-tick frame dump"`.
+Reconfigure a harness build dir: `cmake -B build-native-h -DCMAKE_TOOLCHAIN_FILE=/usr/share/mingw-w64/i686/mingw-windows_i686.cmake -DSKI_DETERMINISTIC=ON -DSKI_HARNESS=ON`. Run: `mkdir -p harness/frames/rebuild_s02 && cd harness/frames/rebuild_s02 && cp /tmp/ski_in.bin . && WINEPREFIX=$HOME/.wine-ski xvfb-run -a -s "-screen 0 1024x768x24" wine <repo>/build-native-h/ski.exe` — wait ~30s, kill, then: `ls | head` shows `frame_000000_main.ppm`, `frame_000001_main.ppm`, … (single window, M0 amendment 1); `harness/.venv/bin/python -c "from PIL import Image; im=Image.open(sorted(__import__('glob').glob('frame_*_main.ppm'))[100]); im.save('/tmp/check.png'); print(im.size)"`. Expected: PPM frames exist, readable by Pillow, 760×734 (matches `evidence/m0-geometry.txt`). Commit: `git add src/ harness/gen_input.py && git commit -m "M2: rebuild-side deterministic input + per-tick frame dump"`.
 
 ### Task 14: Original-side injection (deterministic input for the untouched binary)
 
@@ -917,15 +926,15 @@ Expected: the skier steers exactly per the script (alternating left/right every 
 - [ ] **Step 1: Write `harness/cap_x11.sh`:**
 ```bash
 #!/usr/bin/env bash
-# cap_x11.sh OUTDIR MAIN_WID STATUS_WID DURATION_S
-# ~10 fps capture of both windows (import ~50-100ms/call).
+# cap_x11.sh OUTDIR MAIN_WID DURATION_S
+# ~10 fps capture of the single main window (import ~50-100ms/call).
+# Single window by M0 amendment 1 — the status panel is inside it.
 set -e
 mkdir -p "$1"
-end=$(( $(date +%s%N) + $4 * 1000000000 ))
+end=$(( $(date +%s%N) + $3 * 1000000000 ))
 i=0
 while [ "$(date +%s%N)" -lt "$end" ]; do
   import -window "$2" "$1/cap_$(printf %07d $i)_main.png" 2>/dev/null || true
-  import -window "$3" "$1/cap_$(printf %07d $i)_status.png" 2>/dev/null || true
   i=$((i + 1))
   sleep 0.05
 done
@@ -954,17 +963,16 @@ cp /tmp/ski_in.bin harness/frames/orig_$S/
 MAIN=; for i in $(seq 1 40); do
   MAIN=$(xdotool search --name SkiFree 2>/dev/null | head -1 || true); [ -n "$MAIN" ] && break; sleep 2
 done
-STATUS=$(xdotool search --name SkiFree | tail -1)
-harness/.venv/bin/python - "$MAIN" "$STATUS" "$DUR" <<'EOF' &
+# Single window (M0 amendment 1) — there is no second window to capture.
+harness/.venv/bin/python - "$MAIN" "$DUR" "$S" <<'EOF' &
 import subprocess, sys, time
-main, status, dur = sys.argv[1], sys.argv[2], int(sys.argv[3])
+main, dur, sc = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 end = time.time() + dur
 i = 0
 while time.time() < end:
-    for tag, wid in (("main", main), ("status", status)):
-        subprocess.run(["import", "-window", wid,
-                        f"harness/frames/orig_{sc}/cap_{i:07d}_{tag}.png"],
-                       capture_output=True)
+    subprocess.run(["import", "-window", main,
+                    f"harness/frames/orig_{sc}/cap_{i:07d}_main.png"],
+                   capture_output=True)
     i += 1
     time.sleep(0.05)
 EOF
@@ -996,12 +1004,14 @@ echo "scenario $S done"
 ```python
 #!/usr/bin/env python3
 """Align original (X11 captures) vs rebuild (per-tick dumps) by content hash,
-pixel-diff every tick of both windows.
+pixel-diff every tick. SINGLE window stream (M0 amendment 1 — the status
+panel is inside the main window; there is no second window).
 Usage: diff.py --orig DIR --port DIR --ticks N --prefix evidence/sNN
-Exit 0 iff every tick matched with 0 differing pixels (both windows).
+Exit 0 iff every tick matched with 0 differing pixels.
 """
-import argparse, glob, hashlib, sys, pathlib
+import argparse, glob, hashlib, sys
 from PIL import Image
+import PIL.ImageChops as IC
 
 def load(p):
     return Image.open(p).convert("RGB")
@@ -1015,7 +1025,6 @@ def main():
     ap.add_argument("--ticks", type=int); ap.add_argument("--prefix")
     a = ap.parse_args()
     orig_main = sorted(glob.glob(f"{a.orig}/cap_*_main.png"))
-    st_path = sorted(glob.glob(f"{a.orig}/cap_*_status.png"))
     port_main = sorted(glob.glob(f"{a.port}/frame_*_main.ppm")
                        + glob.glob(f"{a.port}/frame_*_main.png"))
     assert len(port_main) == a.ticks, f"expected {a.ticks} port frames, got {len(port_main)}"
@@ -1038,37 +1047,33 @@ def main():
         if found < 0:
             fails.append((t, "no matching original frame"))
             if len(fails) == 1:
-                pm.save(f"{a.prefix}_diverge_main_{t:06d}.png")
+                pm.save(f"{a.prefix}_diverge_{t:06d}.png")
             continue
         cursor = found
-        ps = load(st_path[found])
-        po_s = load(port_main[t].replace("_main.ppm", "_status.ppm").replace("_main.png", "_status.png"))
-        for name, x, y in (("main", pm, None), ("status", po_s, None)):
-            ref = om[found] if name == "main" else ps
-            if ref.size != x.size:
-                fails.append((t, f"{name} size {x.size} != {ref.size}")); break
-            if x.tobytes() != ref.tobytes():
-                import PIL.ImageChops as IC
-                d = IC.difference(x, ref)
-                n = sum(1 for px in d.getdata() if px != (0, 0, 0))
-                fails.append((t, f"{name} {n}px differ"))
-                if len([f for f in fails if f[0] == t]) == 1:
-                    d.save(f"{a.prefix}_diverge_{name}_{t:06d}.png")
+        ref = om[found]
+        if ref.size != pm.size:
+            fails.append((t, f"size {pm.size} != {ref.size}"))
+            continue
+        if pm.tobytes() != ref.tobytes():
+            d = IC.difference(pm, ref)
+            n = sum(1 for px in d.getdata() if px != (0, 0, 0))
+            fails.append((t, f"{n}px differ"))
+            if len([f for f in fails if f[0] == t]) == 1:
+                d.save(f"{a.prefix}_diverge_{t:06d}.png")
     if fails:
         print(f"FAIL {a.prefix}: {len(fails)} failing frames; first: {fails[:3]}")
         sys.exit(1)
-    print(f"PASS {a.prefix}: {a.ticks} ticks x 2 windows, 0 differing pixels")
+    print(f"PASS {a.prefix}: {a.ticks} ticks, 0 differing pixels")
 
 main()
 ```
-(The `ps` computation above is clumsily written twice for clarity of intent — in the actual file, collapse it to: build `st_path = sorted(glob.glob(..._status.png))` once before the loop and use `ps = load(st_path[found])`.)
 - [ ] **Step 4: Run the suite.** `chmod +x harness/run_scenario.sh`. Run all 8, in order (fix scenario JSONs as events mis-phase — data fixes, re-run that scenario only):
 ```bash
 for s in s01_menu s02_start s03_steering s04_crouch s05_modes s06_longrun s07_monster s08_pause_scores; do
   harness/run_scenario.sh $s || break
 done
 ```
-Expected: `PASS <s>: N ticks x 2 windows, 0 differing pixels` for each. On FAIL: read the first failing frame + the saved divergence PNG; diagnose in this order — (1) capture pipeline (window sizes, X capture timing: re-run the scenario and check whether the SAME frame fails or a different one — non-reproducible = capture issue), (2) scenario event phasing (does the rebuild screenshot at that tick show the input took effect one tick late/early?), (3) reconstruction bug (the divergence is real — fix `src/` against `decompile/`, rebuild, re-run).
+Expected: `PASS <s>: N ticks, 0 differing pixels` for each. On FAIL: read the first failing frame + the saved divergence PNG; diagnose in this order — (1) capture pipeline (window sizes, X capture timing: re-run the scenario and check whether the SAME frame fails or a different one — non-reproducible = capture issue), (2) scenario event phasing (does the rebuild screenshot at that tick show the input took effect one tick late/early?), (3) reconstruction bug (the divergence is real — fix `src/` against `decompile/`, rebuild, re-run).
 - [ ] **Step 5: Commit evidence:** `git add harness/cap_x11.sh harness/run_scenario.sh harness/diff.py evidence/ && git commit -m "M2: 8-scenario frame-diff suite GREEN — rebuild is pixel-identical to original"`.
 
 **M2 exit criterion (project gate):** all 8 scenarios PASS at 0 differing pixels. Do not start M3 until this is green.
@@ -1677,13 +1682,11 @@ for (let t = 0; t < ticks; t++) {
     const iv = setInterval(() => { if (window.__ski && window.__ski.ski_tick_get() > ${t}) { clearInterval(iv); res(true); } }, 5);
     setTimeout(() => { clearInterval(iv); res(false); }, 5000); })`);
   if (!ok) { console.error(`timeout at tick ${t}`); process.exit(2); }
-  for (const w of ["main", "status"]) {
-    const n = w === "main" ? 0 : 1;
-    const url = await evalJs(`window.__ski.ski_window_png(${n})`);
-    if (url && url.startsWith("data:image/png;base64,"))
-      writeFileSync(path.join(outdir, `frame_${String(t).padStart(6, "0")}_${w}.png`),
-                   Buffer.from(url.split(",")[1], "base64"));
-  }
+  // single window (M0 amendment 1) — the status panel is inside the canvas
+  const url = await evalJs(`window.__ski.ski_window_png(0)`);
+  if (url && url.startsWith("data:image/png;base64,"))
+    writeFileSync(path.join(outdir, `frame_${String(t).padStart(6, "0")}_main.png`),
+                 Buffer.from(url.split(",")[1], "base64"));
 }
 console.log(`captured ${ticks} ticks`);
 chrome.kill(); http.kill();
@@ -1745,12 +1748,12 @@ Note the diff direction here: the REBUILD (per-tick PPMs, exactly one per tick) 
 ```
 - [ ] **Step 2: Write `web/boot.js`** (full):
 ```js
-// Boot the module, size the canvas to the game's two windows (canvas =
-// the union bounding box of SkiMain + SkiStatus at their original offsets —
-// values from evidence/m0-geometry.txt; hardcode as CANVAS_W/H below),
-// map keyboard, unlock audio, persist INI via localStorage (shim does it).
+// Boot the module. SINGLE 760x734 canvas = the game's single window
+// (evidence/m0-geometry.txt, M0 amendment 1 — the status panel is an
+// in-window region, not a second window). Map keyboard, unlock audio,
+// persist INI via localStorage (shim does it).
 (async () => {
-  const CANVAS_W = <main_x+main_w+slack>, CANVAS_H = <union height>;  // from Task 3 geometry
+  const CANVAS_W = 760, CANVAS_H = 734;
   const c = document.getElementById("c");
   const scale = () => +document.getElementById("scale").value;
   const fit = () => { c.width = CANVAS_W * scale(); c.height = CANVAS_H * scale(); };
@@ -1823,4 +1826,4 @@ Expected: 16 PASS lines. Record the output verbatim in `evidence/final-verificat
 
 1. **Spec coverage:** decompilation deliverable → Tasks 4–7 ✓; native rebuild + proof → 9–15 ✓; shim + port → 16–21 ✓; browser app → 22 ✓; verification matrix + docs → 23–24 ✓; max-fidelity/0-pixel bar → ground rules + Task 15/21 exits ✓; private/no-contact decision → README rights note (Task 23) ✓; out-of-scope honored (no CI/hosting/mobile tasks) ✓.
 2. **Placeholder scan:** the two places the plan references *runtime-discovered* values (Ghidra addresses, VK codes, window sizes) are always produced by an earlier task into a named file (`decompile/NOTES.md`, `harness/seed.json`, `harness/inject.json`, `evidence/m0-geometry.txt`) before the task that consumes them — data dependencies, not gaps.
-3. **Type/name consistency:** `ski_key_pressed` (T11/T13), `ski_harness_dump_dc` (T13), `stub_tick` (T14), `ski_window_png`/`ski_tick_get`/`ski_set_input`/`ski_key_event`/`ski_click` (T18/T21/T22), `g_ski_tick` (T9–T21), frame naming `frame_%06d_{main,status}.{ppm,png}` (T13/T15/T21) — used identically across tasks.
+3. **Type/name consistency:** `ski_key_pressed` (T11/T13), `ski_harness_dump_dc` (T13), `stub_tick` (T14), `ski_window_png`/`ski_tick_get`/`ski_set_input`/`ski_key_event`/`ski_click` (T18/T21/T22), `g_ski_tick` (T9–T21), frame naming — single window (M0 amendment 1): original `cap_%07d_main.png`, rebuild `frame_%06d_main.ppm`, WASM `frame_%06d_main.png` (T13/T15/T21) — used identically across tasks.
