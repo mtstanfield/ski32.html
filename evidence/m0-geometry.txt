@@ -1,0 +1,26 @@
+# SkiFree original (ski32.exe v1.04) under Wine 9.0 + Xvfb :99 (1024x768x24)
+# Captured: 2026-08-24T20:59:35Z
+#
+# xdotool search --name SkiFree -> single window (id 8388609).
+# xdotool getwindowgeometry (head -1 and tail -1 are the same id):
+Window 8388609
+  Position: 132,30 (screen: 0)
+  Geometry: 760x734
+
+Window 8388609
+  Position: 132,30 (screen: 0)
+  Geometry: 760x734
+
+# Status window: NO separate X11 window exists for the SkiStatus Win32 class
+# in this build. Verified with xwininfo -root -tree during menu AND live gameplay:
+#   0x800001 "SkiFree" (ski32.exe) 760x734+132+30   <- only visible ski32 window
+#   0x800002 "Default IME" (ski32.exe) 1x1+0+0     <- hidden
+#   0x800003 (no name) (ski32.exe) 1x1+0+0         <- hidden
+# Wine maps the Win32 window classes (SkiMain/SkiStatus) to WM_CLASS "ski32.exe",
+# so xdotool search --class SkiStatus cannot match anything here either.
+# The Time/Dist/Speed/Style status panel is painted inside the main window's
+# client area, top-right corner: offset (630,0), box ~128x58 px
+# (crop used for m0-status-window.png: 130x62+630+0).
+
+# Canvas sizing: main window client area = 760x734 px (no WM decorations on
+# bare Xvfb; the 760x734 window is all client area, confirmed by captures).
