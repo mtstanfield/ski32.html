@@ -101,7 +101,7 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x4047e0 | main_winmain | FUN_004047e0 | 213 | GAME | WinMain: lstrcmpiA "nosound" -> c794; game_init_mem, game_reset, game_create_windows, game_start; GetMessage/TranslateMessage/DispatchMessage loop; snd_shutdown; returns msg.wParam |
 | 0x4048c0 | game_init_mem | FUN_004048c0 | 138 | GAME | LocalAlloc pools: c674 str cache (0x50), c5f8 sprite cols (0x5a0), c648 entity pool (8000=100x80B), c758 gate descs (0x2400=256x36B); fatal "Insufficient local memory." on failure |
 | 0x404950 | util_fatal_msg | FUN_00404950 | 27 | GAME | fatal message: MessageBoxA(NULL, msg, "SkiFree" (RT 1), MB_ICONERROR=0x30) |
-| 0x404970 | game_reset | FUN_00404970 | 143 | GAME | reset all game state: srand(GetTickCount), freelist, zero ~15 counters/flags, c678=0x28 (40ms timer), c610=1 |
+| 0x404970 | game_reset | FUN_00404970 | 143 | GAME | reset all game state: c698 = GetTickCount(), inlined CRT srand(c698) → c16c (exact LCG in M1 §1), freelist, zero ~15 counters/flags, c678=0x28 (40ms timer), c610=1 |
 | 0x404a00 | game_freelist_init | FUN_00404a00 | 100 | GAME | init 100-entity freelist (c648 pool, 80B slots) -> c744 |
 | 0x404a70 | game_gate_idx_reset | FUN_00404a70 | 10 | GAME | clear gate descriptor index (c702 = 0) |
 | 0x404a80 | game_start | FUN_00404a80 | 71 | GAME | game_start: create player (type 0, frame 3) at origin -> c64c/c72c; spawn start poles; level init; clear game_over; game_resume |
@@ -115,7 +115,7 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x405640 | snd_load_wave | FUN_00405640 | 83 | GAME | snd_load_wave: FindResourceA(hInst, id, "WAVE") -> pair {HGLOBAL, LockResource(pData)} |
 | 0x4056a0 | snd_shutdown | FUN_004056a0 | 131 | GAME | snd_shutdown: stop sound, FreeLibrary(c78c), free all 9 WAVE pairs |
 | 0x405730 | snd_free | FUN_00405730 | 38 | GAME | snd_free: FreeResource(pair[0]) |
-| 0x405760 | game_pause_toggle | FUN_00405760 | 89 | GAME | pause/resume toggle (F2 key; also the post-assert path): running -> game_pause + title "Ski Paused ... Press F3 to continue" (RT 2); else title "SkiFree" (RT 1) + game_resume |
+| 0x405760 | game_pause_toggle | FUN_00405760 | 89 | GAME | pause/resume toggle (**F3 key**, verified 2026-08-25; also the post-assert path): running -> game_pause + title "Ski Paused ... Press F3 to continue" (RT 2); else title "SkiFree" (RT 1) + game_resume |
 | 0x4057c0 | game_pause | FUN_004057c0 | 52 | GAME | game_pause: KillTimer(0x29a), c600 = now, c6d0 = 0 |
 | 0x405800 | wproc_main | FUN_00405800 | 513 | GAME | SkiMain WndProc dispatcher (computed jump table 0x4059c4/0x4059e0; code proper 451B, body includes the table): WM_CREATE -> wproc_main_create (return -1 on fail) + wproc_main_size; WM_DESTROY -> wproc_main_destroy + PostQuitMessage(0); WM_SIZE -> wproc_main_size + status reposition + c770=(wParam==SIZE_MINIMIZED) + game_pause_auto + UpdateWindow(main) if c67c; WM_ACTIVATE -> c694=wParam, SetFocus(main) if active, game_pause_auto; WM_PAINT -> wproc_main_paint; WM_GETMINMAXINFO -> min size 320x300 (fields at lParam+0x18/+0x1C); WM_ERASEBKGND -> unhandled (default class-brush erase); WM_MOUSEMOVE -> wproc_main_aim (if c67c); WM_KEYDOWN -> wproc_main_input (if c67c); WM_CHAR -> wproc_main_key (if c67c); WM_LBUTTONDOWN/LBUTTONDBLCLK -> wproc_main_turn (if c67c); WM_MOUSEACTIVATE -> MA_NOACTIVATE if screen-x==1; default -> DefWindowProcA |
 | 0x405a10 | game_pause_auto | FUN_00405a10 | 48 | GAME | auto pause/resume on activate/minimize: if window active (c694) && !minimized (c770) -> c67c=1 + game_resume; else c67c=0 + game_pause |
@@ -127,8 +127,8 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x406060 | game_set_center | FUN_00406060 | 73 | GAME | reset entity rect-cache flags (list walk), set view center c5fc/c704 |
 | 0x4060b0 | wproc_main_paint | FUN_004060b0 | 71 | GAME | paint pass: BeginPaint, FillRect (white brush c69c), draw_scene, EndPaint — called from the WM_PAINT (0x0F) case; WM_ERASEBKGND (0x14) is unhandled and goes to DefWindowProcA (default class-brush erase) |
 | 0x406100 | draw_scene | FUN_00406100 | 112 | GAME | draw_scene: render pass (c618 list, offscreen c614) |
-| 0x406170 | wproc_main_input | FUN_00406170 | 565 | GAME | wproc_main keyboard handler (WM_KEYDOWN, gated by c67c in wproc_main): Enter=restart (only when no player), F1=restart, Esc=ShowWindow minimize, F2=game_pause_toggle; arrows/i/c/a/g/d/h/f/b/space/` keys -> facing frames (mode 0), steer +0x46 by -8/+8 (clamp 8) via tables a258/a25c, slide/jump frame-state transitions (frames 3/7/0xc/6/8/0xd/0xe/0xf/0x12/0x13/0x14/0x15); sets frame via game_entity_set_frame + renders if c610 |
-| 0x406500 | game_restart | FUN_00406500 | 76 | GAME | game_restart (Enter/F1 via wproc_main_input): if game_over -> game_reset + game_start + InvalidateRect/UpdateWindow, else DestroyWindow(main) |
+| 0x406170 | wproc_main_input | FUN_00406170 | 565 | GAME | wproc_main keyboard handler (WM_KEYDOWN, gated by c67c in wproc_main 0x40594d). **CORRECTED 2026-08-25 (final decode, PE raw bytes + live-verified; supersedes all earlier rows): two-level dispatch.** First switch: idx = VK−0x0D (0..0x65), idx table @0x4063bc (102B), jt1 @0x4063a8 = {0x40619e, 0x406188, 0x4061ab, 0x406198, 0x4061b1}; only idx 0 (Enter)=00, idx 14 (**Esc**)=01, idx 100 (**F2**)=02, idx 101 (**F3**)=03 differ from 04; VK > 0x72 falls through to the second switch. Second switch 0x4061b1 (requires c72c, frame ∉ {0xb, 0x11}): idx = VK−0x21 (0..0x48), idx table @0x40644c (73B), jt2 @0x406424 = {0x406320, 0x406338, 0x40632c, 0x406314, 0x4061f3, 0x4062b1, 0x406236, 0x406274, 0x406344, 0x40636f(no-op)}. **Verified map: Enter → `if(!c72c) game_restart`; Esc → `ShowWindow(c6c8, SW_MINIMIZE)`; F2 → `game_restart`; F3 → `game_pause_toggle`; Left/Numpad4 → L[] @0x40a258 (steer −8 only at frame 3, else rotate; assert if frame ≥ 0x16); Right/Numpad6 → Rr[] @0x40a25c (steer +8 only at frame 6, else rotate); Up/Numpad8 → table @0x4064bc (3/7/0xc → frame 9 + speed −4 iff speed 0; 6/8 → frame 0xa same; 0xd→0x12, 0xe→0x14, 0xf→0x15, 0x12→0x13, 0x13→0x0d); Down/Numpad2 → frame 0 (mode 0) or table @0x406498 (mode≠0: 0xd→0x13, 0x12→0x0d, 0x13→0x12, 0x14→0x0e, 0x15→0x0f); Insert/Numpad0 → crouch (mode 0: +0x4a=2, frame 0x0d, speed −= 4 iff speed > 4); Numpad1/3/7/9 → facing frames 1/4/3/6 (mode 0); Numpad5 + all else → no-op.** Common tail 0x40636f: if frame changed → set_frame + `if (c610) { render; c610=0; }`. WM_CHAR debug keys: 'X' x−2, 'Y' y−2, 'x'/'v' x+2, 'y'/'w' y+2, 'g' turbo (c670), 'o' render, 'q' manual tick. **F2/F3 ARE live-verified working (pause/resume, restart) — the earlier "F1/F2/F3 are no-ops / menu text stale" note is VOID; menu text is correct.** Full contract in *Input: exact key map* section; direct-call injection `wproc_main(c6c8, 0x100, vk, 0)` verified deterministic |
+| 0x406500 | game_restart | FUN_00406500 | 76 | GAME | game_restart — called by **F2 (0x71, any state)** and by **Enter (0x0D, only when !c72c = no player, i.e. post-crash score screen)**: `game_reset()` (re-seeds RNG via GetTickCount) → if c650 (F3-paused) `game_pause_toggle()` (resume) → `InvalidateRect(c6c8)` → `game_start()` → `UpdateWindow`; if `game_reset` or `game_start` returns 0 → `DestroyWindow(c6c8)` (process exit) |
 | 0x406550 | wproc_main_aim | FUN_00406550 | 136 | GAME | wproc_main mouse handler (WM_MOUSEMOVE, gated by c67c): mouse pos -> facing via util_facing_delta/crouch -> set frame; store c700/c70c, c760=1 |
 | 0x4065e0 | util_facing_delta | FUN_004065e0 | 132 | GAME | facing delta: upright orientation from mouse delta |
 | 0x406670 | util_facing_crouch | FUN_00406670 | 85 | GAME | facing crouch: crouched orientation from mouse delta |
@@ -210,7 +210,7 @@ See the table above for the per-function role. Key subsystems:
   `game_tick_cb` (0x4047c0, c940), which calls `game_tick` only while the game is active (c67c);
   `game_tick` -> `game_physics` (0x401e50) + `game_render` (0x401060). Pause: `game_pause`
   (0x4057c0, `KillTimer`), resume: `game_resume` (0x404ad0). `game_pause_toggle` (0x405760) is
-  the F2 key and the post-assert path; `game_pause_auto` (0x405a10) pauses when the window is
+  the F3 key and the post-assert path; `game_pause_auto` (0x405a10) pauses when the window is
   deactivated or minimized (`c694`/`c770`) and resumes on activate+restore — see *WndProc
   routing / auto-pause semantics* below.
 - **Entities**: 80B structs from a 100-slot pool (`c648`), freelist `c744`; types 0-17
@@ -814,11 +814,11 @@ lane `c944` keeps its `game_reset` zero, so the panel shows the default
   decay outside it.
 - **Crash (non-lethal):** collision sets frame 0xb (col 12 "OUCH!") when upright,
   frame 0x11 (col 18) when crouched; a308 next = 0 (frozen) and `wproc_main_input`
-  skips all controls for frames 0xb/0x11 — the crash is terminal; only Enter/F1/F2
-  recover. **Death (lethal):** only yeti contact kills the player.
-- Jump: only from speed 0 (Ctrl on frames 3/7/0xc → frame 9; on 6/8 → frame 10),
-  sets speed = -4 (backward hop). Crouch slide: Alt (mode 0) → `+0x4a = 2`, frame 0xd,
-  speed -= 4 if > 4.
+  skips all controls for frames 0xb/0x11 — the crash is terminal; only Enter
+  (no player) or F2 (`game_restart`) recover. **Death (lethal):** only yeti contact kills the player.
+- Jump: only from speed 0 (Up on frames 3/7/0xc → frame 9; on 6/8 → frame 0xa),
+  sets speed = -4 (backward hop). Crouch slide: Insert/Numpad0 (mode 0) → `+0x4a = 2`, frame 0xd,
+  speed -= 4 if speed > 4.
 
 ### Monster (yeti) trigger, chase, end conditions (`game_gate_cruise` 0x404350)
 
@@ -896,8 +896,8 @@ which decides trigger vs idle):
 
 1. **Player killed (yeti contact)** — only lethal path: reaper 0x401390 clears
    `c72c` and `c64c`; the world keeps running; all input handlers no-op
-   (gated by `c72c`); Enter or F1 → `game_restart` 0x406500 (`game_reset` +
-   `game_start`); Esc minimizes; F2 toggles the title.
+   (gated by `c72c`); Enter (no player) or F2 → `game_restart` 0x406500 (`game_reset` +
+   `game_start`); Esc minimizes; F3 pauses/resumes.
 2. **Player crash (any other collision)** — terminal frozen state (frame 11/17);
    same recovery keys.
 3. **Style run completion** (not game end): SS at y > 0x21c0 (540 m) →
@@ -935,47 +935,88 @@ which decides trigger vs idle):
 
 ### Input: exact key map and mechanism (Task 14 contract)
 
+**CORRECTED 2026-08-25 (controller, from PE raw-byte decode of both VK jump tables +
+live verification under Wine/Xvfb). The earlier T7 keymap in this section is VOID —
+it labeled VKs with Mac key codes; F1/F2/F3 assignments and the arrow keys were all
+wrong. The
+menu signs ("F2 = Restart / F3 = Pause") and the pause string ("Press F3 to
+continue") are CORRECT, not stale.**
+
 **Mechanism: 100% message-consumed. There is NO key-state global and NO
 `GetKeyState`/`GetAsyncKeyState`/`ToAscii`/`MapVirtualKey` anywhere in the binary
 (grep of all 168 decompiled functions + import table = zero hits).** Every key event
 is handled exactly once, at message time, by the WndProc; nothing is polled between
-ticks. For Task 14 injection, synthesize WM messages (or call the handlers directly):
-`wproc_main` 0x405800 dispatches, gated by `c67c` (game active).
+ticks.
 
-WM_KEYDOWN (0x406170) — `wParam` = VK code:
+**Two-level dispatch.** WM_KEYDOWN handler 0x406170:
+1. First switch: `idx = VK - 0x0D`; if `idx > 0x65` (VK > F3) fall through to the
+   second switch; else `cl = idx_table[idx]` (table @0x4063bc, 102 bytes) →
+   `jmp *jt1[cl]` (jt1 @0x4063a8 = `{0x40619e, 0x406188, 0x4061ab, 0x406198,
+   0x4061b1}`). Only 4 bytes differ from 04: idx 0 (Enter)=00, idx 14 (Esc)=01,
+   idx 100 (F2)=02, idx 101 (F3)=03.
+2. Second switch 0x4061b1: requires player (`c72c`) non-null and frame ∉
+   {0xb (crashed), 0x11}; `idx = VK - 0x21`; if `idx > 0x48` → no-op tail; else
+   `cl = idx_table2[idx]` (table @0x40644c, 73 bytes) → `jmp *jt2[cl]`
+   (jt2 @0x406424 = `{0x406320, 0x406338, 0x40632c, 0x406314, 0x4061f3, 0x4062b1,
+   0x406236, 0x406274, 0x406344, 0x40636f}`; entry 9 = no-op tail).
 
-| VK | key | action |
-|---|---|---|
-| 0x0D | Enter | player present → ignored; no player → falls into F1 = `game_restart` |
-| 0x71 | F1 | `game_restart` (0x406500) |
-| 0x1B | Esc | `ShowWindow(c6c8, SW_MINIMIZE=6)` |
-| 0x72 | F2 | `game_pause_toggle` (0x405760) |
-| 0x21 | Up | if mode == 0 → frame 6 |
-| 0x22 | Right | if mode == 0 → frame 4 |
-| 0x23 | Left | if mode == 0 → frame 1 |
-| 0x24 | Down | if mode == 0 → frame 3 |
-| 0x25 | Space | left action: `a = a258[frame]`; if a == 7 → steer = clamp(steer-8, -8); else frame = a (facing rotate 0→1→2→3) |
-| 0x27 | RShift | right action: `a = a25c[frame]`; if a == 8 → steer = clamp(steer+8, +8); else frame = a (facing rotate 0→4→5→6) |
-| 0x26 | Ctrl | frame state machine: 3/7/0xc → 9 (only if speed == 0, then speed = -4); 6/8 → 10 (same); 0xd→0x12; 0xe→0x14; 0xf→0x15; 0x12→0x13; 0x13→0xd |
-| 0x28 | Shift | if mode == 0 → frame 0; else 0xd→0x12; 0x12→0x13; 0x13→0xd; 0x14→0xe; 0x15→0xf |
-| 0x2D | Alt | if mode == 0: `+0x4a = 2`, frame 0xd, speed -= 4 if > 4 (crouch) |
+**Verified WM_KEYDOWN map (wParam = Win32 VK):**
 
-The lowercase-ASCII cases in the same switch (0x41-0x79 range: `I C A G D H F B `)
-are **dead** — `wParam` of WM_KEYDOWN is a VK (letters are 0x41-0x5A), so they never
-match. After any action: if the frame changed, `set_frame` + `if (c610) { render;
-c610 = 0; }`.
+| VK | key | target | action (all verified live or by table decode) |
+|---|---|---|---|
+| 0x0D | Enter | 0x40619e | player present → no-op; **no player → `game_restart`** (post-crash restart) |
+| 0x1B | Esc | 0x406188 | `ShowWindow(c6c8, SW_MINIMIZE=6)` |
+| 0x71 | **F2** | 0x4061ab | `game_restart` (0x406500) — works from menu, mid-run, paused |
+| 0x72 | **F3** | 0x406198 | `game_pause_toggle` (0x405760) — works paused and unpaused |
+| 0x25 / 0x64 | Left / Numpad4 | 0x4061f3 | left: `a = L[frame]` (L = dword @0x40a258 + 8·frame); if a == 7 → `steer = max(steer-8, -8)`, **and frame → 7** (tail compares a vs frame); else frame = a. If frame ≥ 0x16 → assert line 0xf63 ("ski2.c") |
+| 0x27 / 0x66 | Right / Numpad6 | 0x406236 | right: `a = Rr[frame]` (Rr = dword @0x40a25c + 8·frame); if a == 8 → `steer = min(steer+8, +8)`, **and frame → 8**; else frame = a. assert line 0xf6b if frame ≥ 0x16 |
+| 0x26 / 0x68 | Up / Numpad8 | 0x4062b1 | frame ∈ 3..0x13 → table @0x4064bc: **3, 7, 0xc** → (only if speed == 0) frame 9, speed = −4; **6, 8** → (only if speed == 0) frame 0xa, speed = −4; 0xd→0x12; 0xe→0x14; 0xf→0x15; 0x12→0x13; 0x13→0x0d; all other frames → no-op |
+| 0x28 / 0x62 | Down / Numpad2 | 0x406274 | mode == 0 → frame 0 (upright); mode ≠ 0 → table @0x406498 (frame 0xd..0x15): 0xd→0x13; 0x12→0x0d; 0x13→0x12; 0x14→0x0e; 0x15→0x0f; else no-op |
+| 0x2D / 0x60 | Insert / Numpad0 | 0x406344 | **crouch**: mode == 0 → `+0x4a = 2`, frame 0x0d, speed −= 4 if speed > 4; mode ≠ 0 → no-op |
+| 0x61 | Numpad1 | 0x40632c | mode == 0 → frame 1 |
+| 0x63 | Numpad3 | 0x406338 | mode == 0 → frame 4 |
+| 0x67 | Numpad7 | 0x406314 | mode == 0 → frame 3 |
+| 0x69 | Numpad9 | 0x406320 | mode == 0 → frame 6 |
+| 0x21–0x24 | (unassigned Win32 VKs — dead) | 0x406320/0x406338/0x40632c/0x406314 | same facing frames 6/4/1/3 (defensive entries, never delivered) |
+| 0x65 | Numpad5 | tail | no-op |
+| everything else | — | tail | no-op |
 
-WM_CHAR (0x406780) — debug keys:
+Steer tables (16 dwords each, two interleaved arrays at 0x40a258/0x40a25c):
+L = {1, 2, 3, **7**, 0, 4, 5, 3, 5, 9, 5, 3, 3, 0x0e, 0x10, 0x0d} (L[3] = 7 → the
+only frame where Left steers); Rr = {4, 0, 1, 2, 5, 6, **8**, 2, 6, 2, 0x0a, 6, 6,
+0x0f, 0x0d, 0x10} (Rr[6] = 8 → the only frame where Right steers). So repeated Left
+rotates 0→1→2→3 then steers (frame → 7); repeated Right rotates 0→4→5→6 then steers
+(frame → 8). From the steer frames, Left/Right rotate back (L[7] = 3, Rr[8] = 6).
+
+After any action: tail 0x40636f — `if (esi != player->frame) { set_frame(player,
+esi); if (c610) { game_render(0x401060); c610 = 0; } }`.
+
+**Verified WM_CHAR debug keys (0x406780; range check `'X' ≤ c ≤ 'y'`; table
+@0x40686c, jt @0x40684c; `set_pos` = 0x402390, args (x, y, mode), player-gated):**
 
 | char | action |
 |---|---|
-| 'X' (0x58) | set_pos(player, x-2, y, mode) |
-| 'Y' (0x59) | set_pos(player, x, y-2, mode) |
-| 'x' (0x78) | set_pos(player, x+2, y, mode) |
-| 'y' (0x79) | set_pos(player, x, y+2, mode) |
-| 'f' (0x66) | `c670 = !c670` (double-step / turbo toggle — physics takes 2 steps/tick) |
-| 'r' (0x72) | `game_render` |
-| 't' (0x74) | `game_tick` (manual tick, independent of the timer) |
+| 'X' (0x58) | x −= 2 |
+| 'Y' (0x59) | y −= 2 |
+| 'x' (0x78) **and 'v' (0x76)** | x += 2 |
+| 'y' (0x79) **and 'w' (0x77)** | y += 2 |
+| 'g' (0x67) | `c670 = !c670` (double-step / turbo toggle) |
+| 'o' (0x6f) | `game_render` |
+| 'q' (0x71) | `game_tick` (manual tick, independent of the timer) |
+
+(T7's 'f'/'r'/'t' entries were wrong — those chars are no-ops; the actual chars are
+'g'/'o'/'q' as decoded from the 0x40686c table.)
+
+**Task 14 injection contract:** `wproc_main(c6c8, WM_KEYDOWN=0x100, vk, 0)` called
+directly is deterministic and verified (bypasses X event delivery, which is
+intermittently flaky under Xvfb — keys sometimes don't reach the handler). Use this
+on both sides (original via stub, rebuild natively). No key-up exists; every press
+is a full edge.
+
+**F3-under-gdb note:** calling the F3 path via gdb `call` (which runs
+KillTimer/LoadStringA/SetWindowTextA user32 API calls from a debugger-call context)
+segfaults under Wine — this is a debugger artifact, NOT a game bug: F3 delivered
+normally via X works (verified pause/resume below).
 
 Mouse (all gated by `c67c`):
 
@@ -1131,3 +1172,57 @@ with the original per-tick stream.
   resources exist, **the game is silent in all configurations regardless of the
   flag.** A WASM port can either omit audio entirely (faithful) or wire real samples
   to the 9 pair slots (c6c0..c608) to realize the intended audio.
+
+### 4. Menu / state machine / start & pause — empirical (Wine/Xvfb, 2026-08-25)
+
+**There is no separate menu state.** WinMain 0x4047e0 → `game_create_windows` →
+`game_start` runs at window creation: the player exists from t=0, sitting at the top
+of the course with speed 0. The "title/menu" screen (SkiFree logo, three route
+signs, "Use NumPad [0-9] for better control", "F2 = Restart / F3 = Pause") IS the
+run state at distance 0. Consequences:
+
+- **No auto-start, no start key.** 10 s idle → scene fully static except the
+  bench-with-two-figures idle animation (screen coords ≈ x 255–280, y 610–641 —
+  part of the scene, not a state change). Speed stays 0 while idle.
+- **Any frame-changing key press starts the descent.** First arrow/numpad action
+  (e.g. Left or KP_1) changes the player frame (3 → skiing pose); physics then
+  accelerates the skier; in the slalom scenario speed rises to ~25 m/s and Dist
+  ticks. Numpad5 (the one numpad no-op) should NOT start it. The exact trigger
+  inside `game_physics` 0x401e50 (presumably "frame != idle frame 3" or mode/+0x4a
+  based) is an M2 question — the observable contract above is what the port must
+  match.
+- **Enter** (0x0D) only restarts when no player exists (post-crash score screen).
+- **F2** = `game_restart` 0x406500 from ANY state: `game_reset()` (re-seeds RNG via
+  GetTickCount — see §1) → if `c650` (paused by toggle) `game_pause_toggle()` →
+  `InvalidateRect` → `game_start()` → `UpdateWindow`; if `game_reset` or
+  `game_start` returns 0 → `DestroyWindow` (process exit).
+- **F3** = `game_pause_toggle` 0x405760 from ANY state: unpaused → `game_pause`
+  0x4057c0 (KillTimer, `c650 = 1`, status text "Ski Paused ... Press F3 to
+  continue" via LoadStringA id 3 + SetWindowTextA, InvalidateRect); paused →
+  `c650 = 0` + `game_resume` 0x404ad0 (SetTimer). Verified live: F3 → c6d0 1→0,
+  c650 0→1; F2 → c6d0 0→1, c650 1→0 (restart also clears the latch); F3 again →
+  paused again.
+- **Auto pause/resume on window focus** (`game_pause_auto` 0x405a10, called from
+  WM_ACTIVATE 0x4058c5 and WM_SIZE 0x405878): window deactivated (wParam 0) or
+  minimized (size wParam == 1 → `c770 = 1`) → pause; reactivated and not minimized
+  → resume iff `c694 && !c770` (sets `c67c = 1`).
+
+**State flags (all read live under gdb):**
+
+| global | meaning | set by |
+|---|---|---|
+| `c6d0` | timer running (game clock active) | `game_resume` 0x404ad0 (blocked if `c6d0 || c650`); cleared by `game_pause` 0x4057c0 |
+| `c650` | pause-toggle latch (F3-paused) | `game_pause_toggle`; cleared ONLY by `game_start` 0x404ab2 (i.e. F2 restart) |
+| `c67c` | input + tick gate | `game_pause_auto` (resume path: `c694 && !c770`); 1 at startup |
+| `c694` | window active (WM_ACTIVATE wParam) | WM_ACTIVATE 0x4058c5 (also `SetFocus` when active) |
+| `c770` | minimized (WM_SIZE wParam == 1) | WM_SIZE 0x405878 (also calls `UpdateWindow` when `c67c`) |
+
+**Harness normalization (T9/T14 requirement):** one observed launch frozen at
+startup with c6d0=0 (environment-dependent WM_ACTIVATE/WM_SIZE sequence under
+Xvfb). After launch, the harness must verify/normalize to the known-good state
+(c6d0=1, c650=0, c67c=1, c694=1, c770=0) — e.g. send WM_ACTIVATE(1)+WM_SIZE(0)
+or call the pause_auto resume path — before the first scenario frame.
+
+**Static Time display:** the status panel's Time value stays 0:00:00.00 in every
+observed state (menu, running, paused); only Dist/Speed/Style update. Faithful to
+reproduce.

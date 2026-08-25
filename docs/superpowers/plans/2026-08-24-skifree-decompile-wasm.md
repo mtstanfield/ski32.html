@@ -435,7 +435,7 @@ Run: `harness/.venv/bin/python harness/gen_seed_header.py`.
 
 ---
 
-## M2 — Rebuild native + prove equality (Tasks 9–13)
+## M2 — Rebuild native + prove equality (Tasks 9–15)
 
 ### Task 9: CMake + native skeleton
 
