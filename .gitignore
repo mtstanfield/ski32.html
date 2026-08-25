@@ -5,3 +5,5 @@ __pycache__/
 harness/frames/
 evidence/*.tmp
 harness/.venv/
+build-native/
+build-wasm/
