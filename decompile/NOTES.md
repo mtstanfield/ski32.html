@@ -56,7 +56,7 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x4020b0 | util_rand_range | FUN_004020b0 | 23 | GAME | rand() % n |
 | 0x4020d0 | game_entity_new | FUN_004020d0 | 78 | GAME | new entity from template: type (assert 0..0x11) at +0x18, set frame |
 | 0x402120 | game_entity_set_frame | FUN_00402120 | 96 | GAME | set entity frame (assert <= 0x3f); column from frame_col_table (a1ac) |
-| 0x402180 | game_entity_set_col | FUN_00402180 | 152 | GAME | set sprite column (+0x10) and adjust gate count (c6fc) |
+| 0x402180 | game_entity_set_col | FUN_00402180 | 152 | GAME | set sprite column (+0x10) and adjust on-screen area budget (c6fc) |
 | 0x402220 | game_group_split | FUN_00402220 | 86 | GAME | split/clone group: alloc copy, link as partner (+0x04) |
 | 0x402280 | game_entity_alloc | FUN_00402280 | 130 | GAME | entity alloc from freelist (c744) in pool (c648) |
 | 0x402310 | util_frame_special | FUN_00402310 | 21 | GAME | frame-is-special test (frames with alt column mapping in a1ac) |
@@ -69,8 +69,8 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x4026a0 | game_entity_new_col | FUN_004026a0 | 78 | GAME | new entity + sprite column (type 0..0x11, col from game_sprite_frame) |
 | 0x4026f0 | game_spawn_pick_wide | FUN_004026f0 | 122 | GAME | type pick (wide zone): weighted rand(1000) over {2,10,11,13,14,15,16}; 0x12 when view full (c748/32 < c6fc) |
 | 0x402770 | game_spawn_pick_speed | FUN_00402770 | 37 | GAME | type pick (speed zone): 11 or 0x12 from speed threshold (c748/64 vs c6fc) |
-| 0x4027a0 | game_spawn_pick_narrow | FUN_004027a0 | 52 | GAME | type pick (center line): 50/50 {2,11}; 0x12 when view full |
-| 0x4027e0 | game_spawn_pick_mid | FUN_004027e0 | 100 | GAME | type pick (mid zone): rand(100) over {10,13,15,11,16,0x12} |
+| 0x4027a0 | game_spawn_pick_narrow | FUN_004027a0 | 52 | GAME | type pick (GS lane): r = rand(64): r == 0 → 2 (dog, 1/64), else 0xd (13, 63/64); 0x12 when view full (disasm 0x4027be-0x4027d3: `neg %ax; sbb %eax,%eax; and $0xb,%eax; add $0x2,%eax`) |
+| 0x4027e0 | game_spawn_pick_mid | FUN_004027e0 | 100 | GAME | type pick (FS lane): r = rand(100): <2→10, <20→0xd, <50→0xf, <60→0xb, <80→0x10 (16, banner), else 0xe (14, rock); 0x12 when view full (disasm 0x402838-0x402840: `cmp $0x50; sbb; and $0xfe,%al; add $0x10`) |
 | 0x402850 | game_sprite_frame | FUN_00402850 | 118 | GAME | sprite column from entity type (type switch) |
 | 0x4028e0 | game_entity_activate | FUN_004028e0 | 584 | GAME | entity activate: per-type dispatch (activate_sound_table a308, activate_anim_table a434), sound via c6c0/c718 |
 | 0x402ba0 | snd_play | FUN_00402ba0 | 58 | GAME | play WAVE: LockResource + sndPlaySoundA (c790), gated by sound_disabled (c794) |
@@ -78,7 +78,7 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x402c60 | game_style_ss | FUN_00402c60 | 452 | GAME | SS style check: INI "Ski"/"SS" (c0d8); style tick c944/c948/c94c/c95c/c964 |
 | 0x402e30 | util_lerp | FUN_00402e30 | 66 | GAME | lerp: (p1 - (p1-p2)*(p3-p5))/(p3-p4); asserts p3 != p4 |
 | 0x402e80 | game_player_face | FUN_00402e80 | 56 | GAME | player facing-frame update (c72c type, +0x11 sign -> frame 3-13 via game_entity_set_frame) + status redraw |
-| 0x402ec0 | score_show | FUN_00402ec0 | 619 | GAME | high-score dialog: INI read ("Ski"/"entpack.ini"), parse <=10 scores, insert new (time, negated) into DESCENDING list, write back "%ld "/"%9ld"/"%s", MessageBox "High Scores" + "that's you!"/"try again!"; uVar7==10 = did not qualify |
+| 0x402ec0 | score_show | FUN_00402ec0 | 619 | GAME | high-score dialog: GetPrivateProfileStringA("Ski",key,"",buf,256,"entpack.ini"), parse <=10 whitespace-separated longs (_atoi), stored = (is_time) ? -value : value, insert at first index where stored[i] > new (list ascending in stored = descending time; max 10, last dropped), write back one line of "%ld " (c0ec) items via WritePrivateProfileStringA, MessageBoxA(c6c8, body, "High Scores" RT15, 0): lines "\n"-joined, times via util_fmt_time(-stored) / FS scores "%9ld" (c0e4), inserted line += RT16 " <-- that's you!"; insert index 10 = did not qualify → append "\n\n" (c0dc) + new value + RT17 " <-- try again!" |
 | 0x403130 | game_gate_set_col | FUN_00403130 | 66 | GAME | gate column set (from sprite table c5f8) |
 | 0x403180 | game_style_fs | FUN_00403180 | 207 | GAME | FS style check: INI "Ski"/"FS" (c0f4); c954/c968 flags + style score |
 | 0x403250 | game_style_gs | FUN_00403250 | 452 | GAME | GS style check: INI "Ski"/"GS" (c0f8); c944/c948/c950/c958/c960 flags |
@@ -93,22 +93,22 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x404070 | game_group_head | FUN_00404070 | 33 | GAME | group head: walk group links to first member |
 | 0x4040a0 | game_gate_update | FUN_004040a0 | 129 | GAME | gate array update/spawn loop (c720 list; view band c5fc/c684/c68c) |
 | 0x404130 | game_gate_spawn | FUN_00404130 | 138 | GAME | spawn entity from gate descriptor (36B records at c758) |
-| 0x4041c0 | game_gate_advance | FUN_004041c0 | 194 | GAME | advance gate descriptor (next 36B record) |
-| 0x404290 | game_gate_type4 | FUN_00404290 | 177 | GAME | gate type-4 behavior |
-| 0x404350 | game_gate_cruise | FUN_00404350 | 883 | GAME | gate/level entity update (types 5-8 crash objects; client height c6d8) |
+| 0x4041c0 | game_gate_step | FUN_004041c0 | 194 | GAME | gate state step (per descriptor, disasm 0x4041d7-0x40427a): x+=vx, y+=vy, z+=fdelta; type 4 → game_gate_type4, 5-8 → game_gate_cruise, else assert 0xaf9; if spawned: assert entity+0x0c==desc (0xb00), set_pos(entity,x,y,z) + set_frame(entity, desc+0x10) every tick |
+| 0x404290 | game_gate_type4 | FUN_00404290 | 177 | GAME | bench update (disasm 0x4042bb-0x40433f): y ≤ -0x400 → frame 41, vy=+2, x=-144; y ≥ 0x5c00 → frame 39, vy=-2, x=-112; else if spawned && frame == 39 && rand(1000)==0 → spawn snowboarder (type 3, frame 0x21) at bench x/y, bench → frame 0x28 |
+| 0x404350 | game_gate_cruise | FUN_00404350 | 883 | GAME | yeti update (types 5-8): airborne z/fdelta handling (0x404378); wake-anim states 50-55 vs c698-desc+0x20 (jump table 0x4046c4); self-gate → per-type sentinel velocity, else player-threshold trigger → teleport beyond view edge + clamp velocity (±16, ±26) + snd_play(c6f0); (0,0) idle → rand(10) frame 42/43 |
 | 0x4046e0 | game_gate_scan | FUN_004046e0 | 222 | GAME | gate array scan: spawn within view band (c5fc +/- 0x3c, c684/c68c) |
 | 0x4047c0 | game_tick_cb | FUN_004047c0 | 22 | GAME | SetTimer callback (c940): if game active (c67c) -> game_tick; returns 1 |
 | 0x4047e0 | main_winmain | FUN_004047e0 | 213 | GAME | WinMain: lstrcmpiA "nosound" -> c794; game_init_mem, game_reset, game_create_windows, game_start; GetMessage/TranslateMessage/DispatchMessage loop; snd_shutdown; returns msg.wParam |
-| 0x4048c0 | game_init_mem | FUN_004048c0 | 138 | GAME | LocalAlloc pools: c674 str cache (0x50), c5f8 sprite cols (0x5a0), c648 entity pool (8000=100x80B), c758 gate descs (0x2400=100x36B); fatal "Insufficient local memory." on failure |
+| 0x4048c0 | game_init_mem | FUN_004048c0 | 138 | GAME | LocalAlloc pools: c674 str cache (0x50), c5f8 sprite cols (0x5a0), c648 entity pool (8000=100x80B), c758 gate descs (0x2400=256x36B); fatal "Insufficient local memory." on failure |
 | 0x404950 | util_fatal_msg | FUN_00404950 | 27 | GAME | fatal message: MessageBoxA(NULL, msg, "SkiFree" (RT 1), MB_ICONERROR=0x30) |
 | 0x404970 | game_reset | FUN_00404970 | 143 | GAME | reset all game state: srand(GetTickCount), freelist, zero ~15 counters/flags, c678=0x28 (40ms timer), c610=1 |
 | 0x404a00 | game_freelist_init | FUN_00404a00 | 100 | GAME | init 100-entity freelist (c648 pool, 80B slots) -> c744 |
 | 0x404a70 | game_gate_idx_reset | FUN_00404a70 | 10 | GAME | clear gate descriptor index (c702 = 0) |
 | 0x404a80 | game_start | FUN_00404a80 | 71 | GAME | game_start: create player (type 0, frame 3) at origin -> c64c/c72c; spawn start poles; level init; clear game_over; game_resume |
 | 0x404ad0 | game_resume | FUN_00404ad0 | 128 | GAME | game_resume: guards c6c8/c6d0/c650; c6d0=1, c698=now; style-tick adjust (c948 += now - c600) if c95c||c958; SetTimer(c6c8, 0x29a, c678, c940) |
-| 0x404b50 | game_level_init | FUN_00404b50 | 1448 | GAME | level init: build 4 gate arrays (c5e0/c630/c658/c738), gate list (c720 via game_gate_list_add), style reset |
+| 0x404b50 | game_level_init | FUN_00404b50 | 1448 | GAME | level init: build 5 gate lists (SS c630 0x404b72-0x404cd7, GS c5e0 0x404ce1-0x404e79, FS c658 0x404e83-0x404f48, pines c738 0x404f4d-0x404fb6, benches+monsters c720 0x404fb8-0x4050eb) via game_gate_list_add, style reset |
 | 0x405100 | game_gate_list_clear | FUN_00405100 | 30 | GAME | gate list clear (free descriptors, c720=NULL, c702=0) |
-| 0x405120 | game_gate_list_add | FUN_00405120 | 187 | GAME | gate list add: 36B descriptor from c758 (max 0x100), append to c720 |
+| 0x405120 | game_gate_list_add | FUN_00405120 | 68 | GAME | gate list add (disasm 0x405120-0x405163): copy 36B stack descriptor into the next c758 slot (assert c702 ≤ 0x100), [slot+0] = NULL (backfilled by game_gate_spawn), [slot+4] = c5f8 + low16(desc+0x08)*0x10 (column entry ptr), [slot+0x0c] = type<<16, append slot ptr to the caller's list triple |
 | 0x4051e0 | game_startpoles_spawn | FUN_004051e0 | 226 | GAME | spawn start flagpoles (type 0x11, frames 0x35-0x38) |
 | 0x4052d0 | game_create_windows | FUN_004052d0 | 842 | GAME | create_windows: GetDeviceCaps HORZRES/VERTRES (c6a0/c74c), c61c=hInstance, white brush c69c, FindWindowA("SkiMain") single-instance check, load 9 WAVE resources (gated by !c794), RegisterClassA SkiMain (lpfnWndProc = wproc_main, 0x405800) + SkiStatus (wproc_status; the "button" string a1a4 is NOT registered — dead .rdata), CreateWindowExA both, icon (c120); c940 = &game_tick_cb; flags init c6d0=0, c770=1, c694=0, c67c=0 (starts paused) |
 | 0x405620 | snd_init | FUN_00405620 | 20 | GAME | snd_init: c790 = sndPlaySoundA import |
@@ -215,18 +215,22 @@ See the table above for the per-function role. Key subsystems:
   routing / auto-pause semantics* below.
 - **Entities**: 80B structs from a 100-slot pool (`c648`), freelist `c744`; types 0-17
   (0 = player, 1-10 spawnable obstacles/gates, 11-17 gate variants; 0x12 = "no spawn").
-- **Gates**: four arrays (`c5e0/c630/c658/c738`) + descriptor list (`c720`, 36B records in `c758`,
-  max 100); spawned by `game_gate_scan`/`game_gate_update` within the view band
-  (client rect extended by 0x78px).
+- **Gates**: five lists (`c630` SS, `c5e0` GS, `c658` FS, `c738` tall poles, `c720`
+  moving: benches + yetis), each a `{first, end, scan-cursor}` pointer triple into the
+  contiguous 36B descriptor pool `c758` (256 slots, max 256); the four static lists are
+  spawned by `game_gate_scan` within the view band (client rect extended by 0x78px);
+  `c720` is additionally stepped every tick by `game_gate_update`.
 - **Style score** (FS/SS/GS bonuses, INI-gated via keys at 0x40c0d8/c0f4/c0f8): accumulators at
   `c944-c968`, displayed as `Style:` on the status panel.
 - **High scores**: `score_show` (0x402ec0) reads/writes section `Ski` of `entpack.ini`
-  (0x40c084), keeps up to 10 scores **descending** (index 0 = best), stored as `"%ld "` items with
-  times negated; box caption `High Scores` (RT_STRING 15), suffixes `that's you!`/`try again!` (16/17).
-- **Sound**: 9 WAVE resources (ids 1-9) loaded at startup (`snd_load_wave`) into 8-byte
-  `{HGLOBAL, pData}` pairs; played via `sndPlaySoundA` (`c790`); disabled by the `nosound`
+  (0x40c084), keeps up to 10 scores, index 0 = best (times stored negated → list
+  **ascending** in stored value = **descending** time), one space-separated `"%ld "` line;
+  box caption `High Scores` (RT_STRING 15), suffixes `that's you!`/`try again!` (16/17).
+- **Sound**: 9 `snd_load_wave` calls at startup (ids 1-9) into 8-byte `{HGLOBAL,
+  pData}` pairs; played via `sndPlaySoundA` (`c790`); disabled by the `nosound`
   cmdline flag (`c794`); pair map: id1→c6c0, id2→c768, id3→c5d0, id4→c718, id5→c750,
-  id6→c628, id9→c6f0, id7→c6e0, id8→c608.
+  id6→c628, id9→c6f0, id7→c6e0, id8→c608. **No WAVE resources exist in the PE** —
+  every load returns NULL and all playback is silent (M1#3).
 - **Windows**: `main_winmain` -> `game_create_windows` (0x4052d0) registers classes `SkiMain`
   (WndProc = `wproc_main`, 0x405800) and `SkiStatus` (WndProc = `wproc_status`) and creates both
   windows (status window initial text = `c788`, an empty 64B buffer). The main window title is
@@ -365,8 +369,8 @@ Full map in `decompile/ghidra/globals.json` (132 entries: every game data symbol
 - Game state block `c5d0-c968`: HWNDs (`c6c8` main, `c624` status), DCs (`c63c` screen, `c6cc`
   status, offscreen/mask DCs `c730/c5ec/c710/c6a4/c6ec`), offscreen bitmap `c614`
   (`c690/c6e8` size), entity pool `c648` (100×80B) + freelist `c744`, active list `c618`,
-  player `c64c`/`c72c`, sprite column table `c5f8`, gate arrays `c5e0/c630/c658/c738` +
-  descriptors `c758` (100×36B) + list `c720` + index `c702` + count `c6fc`, view rect
+  player `c64c`/`c72c`, sprite column table `c5f8`, gate lists `c630/c5e0/c658/c738/c720` +
+  descriptors `c758` (256×36B) + index `c702` + count `c6fc`, view rect
   `c6b0-c6bc` (client) / `c680-c68c` (extended by 0x78) + area `c748`, spawn cursors
   `c5d8/c714` (step 0x3c), active/minimize flags (`c694` window active, `c770` window
   minimized, `c67c` game active = active && !minimized), ticks (`c698` current, `c5f4` delta,
@@ -375,7 +379,9 @@ Full map in `decompile/ghidra/globals.json` (132 entries: every game data symbol
   WAVE pairs, `c78c` HMODULE), style accumulators `c944-c968`, score `c6a8`, string cache
   `c674`, screen `c6a0/c74c` (HORZ/VERTRES).
 - Resources: RT_STRING STRINGTABLE at VA 0x41c718 (17 length-prefixed UTF-16 entries, see below);
-  9 RT_WAVE resources (ids 1-9) in `.rsrc`; icon `ICONSKI`/`ICONSKI2`.
+  89 RT_BITMAP sprites + 6 RT_ICON + 2 RT_GROUP_ICON in `.rsrc` — **no RT_WAVE node**
+  (the 9 `snd_load_wave` FindResourceA calls all return NULL at runtime; see M1#3);
+  icon `ICONSKI`/`ICONSKI2`.
 
 ## RT_STRING table (17 strings, VA 0x41c718)
 
@@ -646,18 +652,23 @@ unused). Entry layout (disasm-verified):
 ### Gate descriptor (36B = 9 dwords)
 
 Pool `c758` = LocalAlloc(0x2400) (256 slots); count `c702` (max 0x100 asserted by
-`game_gate_list_add` 0x405120); list head `c720`. Array triple `{head, tail(+0x24
-stride), cursor}` at `c630` (SS), `c5e0` (GS), `c658` (FS), `c738` (tall poles);
-`c720` is the **moving** list (benches + yetis), stepped by `game_gate_update`
-0x4040a0 instead of `game_gate_scan` 0x4046e0.
+`game_gate_list_add` 0x405120). The five lists (`c630` SS, `c5e0` GS, `c658` FS,
+`c738` tall poles, `c720` **moving**: benches + yetis) are each a
+`{first, end, scan-cursor}` pointer triple into the contiguous `c758` slot array;
+list_add takes slot `c758 + c702*0x24`, asserts `[list+4]` equals it (0xa20) and
+then advances `[list+4]` by 0x24 — the single global counter `c702` is shared by
+all five lists. Only `c720` is stepped every
+tick by `game_gate_update` 0x4040a0; the other four are touched only by
+`game_gate_scan` 0x4046e0 (spawn) — so gate_step's per-tick `set_frame(entity,
+desc+0x10)` applies **only** to benches/yetis.
 
 | off | field | evidence |
 |---|---|---|
 | +0x00 | entity ptr (NULL until spawned) | gate_step 0x40421f `edi=[esi]`; list_add `*desc = 0` |
 | +0x04 | col entry ptr = `c5f8 + low16(+0x08)*0x10` | list_add 0x405120: `desc[1] = (ushort)desc[2]*0x10 + c5f8` |
-| +0x06 | col (u16) | from template slot (frame value of signpost gates) |
+| +0x08 | col (u16) | list_add 0x4051bd `mov 0x8(%ebx),%ax` feeds the col-entry ptr; level_init writes it **directly** (signposts 23/24, banners 57-63, pines 64); 0 for benches/monsters → frame path (gate_spawn 0x404187) |
 | +0x0c | type (u16: 0xc = SS/GS signpost, 0xd = pine/pole, 0x11 = start/finish banner, 4 = bench, 5-8 = yeti) | gate_step 0x4041e7/0x4041f2: `eax=[esi+0xc]; cmp 4 / cmp 5..8` |
-| +0x10 | frame (u16) | gate_step `set_frame(entity, desc[4])` = +0x10 |
+| +0x10 | frame (u16) | used only when col == 0 (gate_spawn 0x404187 `alloc_by_type_frame(type, desc+0x10)`); gate_step `set_frame(entity, desc+0x10)` every tick for c720 gates; level_init **never writes it** (stack garbage for col ≠ 0 gates — harmless, those lists are never stepped) |
 | +0x14 | x | gate_step 0x4041d7-0x4041df: `[esi+0x14] += [esi+0x1a]` |
 | +0x16 | y | `[esi+0x16] += [esi+0x1c]` |
 | +0x18 | z (mode passed to set_pos; benches carry 32) | `[esi+0x18] += [esi+0x1e]` |
@@ -676,41 +687,55 @@ Static arrays (spawned by `game_gate_scan` when they enter the extended view):
 
 (Values in 1/16-m position units; ÷16 = meters. Disasm-verified, 0x404b50-0x405100.)
 
-- **SS course (c630):** banner type 0x11 frame 61 "Slalom" at (x ≥ -0x140 view-clamped,
-  y ≤ 0x208 = 32.5 m view-clamped); "Start" signs type 0x11 frames 57/58 at (-576,
-  0x280) / (-320, 0x280) [40 m]; **signpost gates type 0xc**, alternating
-  x = -240 (col 23, frame 0x17) / x = -144 (col 24, frame 0x18), y = 0x3c0 .. step
-  0x140 while < 0x21c0 (**24 gates, 60..476 m, step 20 m**); "Finish" signs type 0x11
-  frames 59/60 at (-576, 0x21c0) / (-320, 0x21c0) [540 m]. Gate cursor `c94c` = first
-  signpost.
-- **GS course (c5e0):** banner type 0x11 frame 62 "Tree Slalom" (x ≤ 0x140 clamped,
-  y ≤ 0x208); "Start" signs frames 57/58 at (0x140=320, 0x280) / (0x200=512, 0x280)
-  [40 m]; **signpost gates type 0xc**, alternating x = 144 (col 23, frame 0x17) /
-  x = 432 (col 24, frame 0x18), y = 0x410 .. step 0x190 while < 0x4100
-  (**39 gates, 65..1015 m, step 25 m**). Gate cursor `c950` = first signpost.
-  **No pine gates exist in the GS course** — the loop computes a type 0xd pine
-  (col = rand(8), x = 400 + rand(0x20)) into the stack template but never calls
-  list_add for it, and the following `rand(400)` result is discarded: 3 rand() calls
-  per gate × 39 gates = **117 RNG consumption per game_start** (must be reproduced
-  for exact seed-freeze; see M1 RNG). "Finish" signs frames 59/60 at (320, 0x4100) /
-  (512, 0x4100) [1040 m].
-- **FS course (c658):** banner type 0x11 frame 63 "Free-style" at (0, view-clamped
-  ≤ 0x208); "Start" signs frames 57/58 at (-160, 0x280) / (160, 0x280) [40 m];
-  "Finish" signs frames 59/60 at (-160, 0x4100) / (160, 0x4100) [1040 m].
-- **Tall poles (c738):** type 0xd frame/col 64 at x = -128, y = -0x400 .. 0x5c00 step
-  0x800 (**13 poles, -64..1472 m, step 128 m**).
+- **SS course (c630):** banner type 0x11 **col 61** "Slalom" at
+  (x = max(c6b0−c704+c640+0x3c, −320 (0xFEC0)); y = c if c ≤ 0x280 else 0x208,
+  c = c6bc−c5fc+c5f2−0x3c); "Start" signs type 0x11 **cols 57/58** at (−576 (0xFDC0),
+  0x280) / (−320 (0xFEC0), 0x280) [40 m]; **signpost gates type 0xc**, alternating
+  x = −496 (0xFE10, col 23) / x = −400 (0xFE70, col 24), y = 0x3c0 .. step
+  0x140 while < 0x21c0 (**24 gates, 60..520 m, step 20 m**; disasm 0x404c40-0x404c72:
+  `neg %eax; sbb %eax,%eax; and $0xa0,%al; add $0xfffffe70`, esi toggles 1/0 each
+  iteration — esi = 1 → 0xFFA0+0xFE70 = 0xFE10 = −496 with col 23, esi = 0 →
+  0xFE70 = −400 with col 24); "Finish" signs type 0x11
+  **cols 59/60** at (−576 (0xFDC0), 0x21c0) / (−320 (0xFEC0), 0x21c0) [540 m].
+  Gate cursor `c94c` = first signpost.
+- **GS course (c5e0):** banner type 0x11 **col 62** "Tree Slalom" at
+  (x = min(c6b8−c704+c640−0x3c, 320 (0x140)); y = c if c ≤ 0x280 else 0x208,
+  c = c6bc−c5fc+c5f2−0x3c); "Start" signs type 0x11 **cols 57/58** at
+  (0x140=320, 0x280) / (0x200=512, 0x280) [40 m]; **signpost gates type 0xc**,
+  alternating x = −80 (0xFFB0, col 23) / x = 432 (0x1B0, col 24), y = 0x410 ..
+  step 0x190 while < 0x4100 (**39 gates, 65..1015 m, step 25 m**; disasm
+  0x404da5-0x404de6: `neg %edx; sbb %edx,%edx; and $0xffffffe0,%edx; add $0x1b0`
+  — index 1 → 0xFFFFFE00+0x1B0 = 0xFFB0 = −80 with col 23, index 0 → 0x1B0 = 432
+  with col 24). Gate cursor `c950` = first signpost. **No pine gates exist in the
+  GS course** — the loop computes a type 0xd pine (col = `game_sprite_frame(0xd)`
+  = rand(8) → 49/50/51, x = 0x190 + rand(0x20)) into the stack template but never
+  calls list_add for it, and the following `rand(400)` result is discarded: 3
+  rand() calls per gate × 39 gates = **117 RNG consumption per game_start** (must
+  be reproduced for exact seed-freeze; see M1 RNG). "Finish" signs type 0x11
+  **cols 59/60** at (320, 0x4100) / (512, 0x4100) [1040 m].
+- **FS course (c658):** banner type 0x11 **col 63** "Free-style" at (x = 0;
+  y = c if c ≤ 0x280 else 0x208, c = c6bc−c5fc+c5f2−0x3c); "Start" signs type 0x11
+  **cols 57/58** at (-160 (0xFF60), 0x280) / (160 (0xA0), 0x280) [40 m];
+  "Finish" signs type 0x11 **cols 59/60** at (-160, 0x4100) / (160, 0x4100) [1040 m].
+- **Tall poles (c738):** type 0xd **col 64 (direct)** at x = -128 (0xFF80),
+  y = -0x400 .. 0x5c00 step 0x800 (**13 poles, -64..1472 m, step 128 m**; loop
+  `cmp $0x5c00; jle` includes the 23552 endpoint).
 
 Moving list (c720, `game_gate_update` 0x4040a0 — moves every tick):
 
-- **Benches type 4**, z = 32 (24 total): at y = -0x400 (-64 m) one: frame 41
-  (x = -144, vy = +2); at every y = 0 .. 0x5800 step 0x800 (64..1344 m, 11 pairs):
-  frame 39 (x = -112, vy = -2) + frame 41 (x = -144, vy = +2); at y = 0x5c00 (1472 m)
+- **Benches type 4**, z = 32 (24 total): loop `si = -0x400; si ≤ 0x5c00; si += 0x800`
+  (disasm 0x404fc2-0x40504f). At y = -0x400 (-64 m) one: frame 41 (x = -144 (0xFF70),
+  vy = +2); at every y = 0x400 .. 0x5400 step 0x800 (64..1344 m, 11 pairs): frame 39
+  (x = -112 (0xFF90), vy = -2) + frame 41 (x = -144, vy = +2); at y = 0x5c00 (1472 m)
   one: frame 39 (x = -112, vy = -2). Benches drift vertically (gate_step); 0x404290
-  re-wraps them past y < -0x3ff / y > 0x5bff, and a top-band frame-39 bench spawns a
-  snowboarder (type 3, frame 0x21, at the bench's x/y) when rand(1000)==0, then
-  switches to frame 0x28.
-- **Yetis (types 5-8), frame 42 (sleep):** type 7 at (49476 ≈ 3092 m, 0); type 8 at
-  (16060 ≈ 1004 m, 0); type 5 at (0, -200 = -12.5 m); type 6 at (0, 32060 ≈ 2004 m).
+  re-wraps them at y ≤ -0x400 (→ frame 41, x = -144, vy = +2) / y ≥ 0x5c00 (→ frame
+  39, x = -112, vy = -2), and a spawned frame-39 bench spawns a snowboarder (type 3,
+  frame 0x21, at the bench's x/y) when rand(1000)==0 (0x404305), then switches to
+  frame 0x28.
+- **Yetis (types 5-8), frame 42 (sleep):** added in order 7, 8, 5, 6 (disasm
+  0x405051-0x4050eb). Type 7 at (49476 (0xC144) ≈ 3092 m, 0); type 8 at
+  (16060 (0x3EBC) ≈ 1004 m, 0); type 5 at (0, **-2060 (0xF7F4) = -128.75 m**)
+  (0x4050c7: `movw $0xf7f4,0x26(%esp)`); type 6 at (0, 32060 (0x7D3C) ≈ 2004 m).
   Triggers: see *Monster*.
 
 ### Windows and status panel (child-window conclusion)
@@ -797,35 +822,72 @@ lane `c944` keeps its `game_reset` zero, so the panel shows the default
 
 ### Monster (yeti) trigger, chase, end conditions (`game_gate_cruise` 0x404350)
 
-Per tick, per yeti descriptor (types 5-8 in c720). Two gates must pass for the
-trigger: a **self-gate** on the yeti's own position (0x404471-0x4044d8), then the
-**player threshold** (0x4044f2-0x404533):
+Per tick, per yeti descriptor (types 5-8 in c720). A **self-gate** on the yeti's
+own position (0x404471-0x4044d8) decides between a per-type **sentinel velocity**
+(pass → chase immediately) and the **player threshold** (fail, 0x4044dd-0x404533,
+which decides trigger vs idle):
 
-- **Self-gate (disasm 0x404471-0x4044d8):** type 5: yeti_y ≤ -2000; type 6:
-  yeti_y ≥ 32000; type 7: yeti_x ≤ -16000; type 8: yeti_x ≥ 16000. On failure the
-  yeti idles (velocity from a per-type sentinel: type 6 → 0, type 7 → -256,
-  type 8 → +16, type 5 → -28640, driving the idle frame family).
-- **Player threshold (player position, disasm 0x4044f2-0x404533):**
-  - type 6 (yeti at y=32060): **player y > 32000 = 2000 m** (the ~2000 m rule).
-  - type 8 (yeti at x=16060): player x > 16000 = 1000 m (to the right).
-  - type 5: player y < -2000; type 7: player x < -16000 — mirror regions, unreachable
-    in normal downhill play.
-- **On trigger (0x404539):** teleport the yeti one full view away from the player in
-  the direction of separation: if player_x - yeti_x > viewW → yeti_x = player_x -
-  viewW; if < -viewW → +viewW; same for y with viewH (viewW = `(short)c5f0`,
-  viewH = `(short)c6d8`); store velocity `vx = clamp(dx, ±16)`, **vy = 0**,
-  `fdelta = 1` (the velocity-mixing code at 0x4045d8-0x404613 is dead — its results
-  are overwritten at 0x40461d-0x404628); `snd_play(c6f0)` (wave 7 — silent, no WAVE
-  resource exists).
-- **Chase is one-shot:** the trigger re-arms only while the self-gate still holds.
-  After the first teleport the yeti sits at player_y ∓ viewH, which normally fails
-  the type-6 self-gate (yeti_y < 32000) → next tick it idles: velocity zeroed,
-  frame 42/43 (rand(10) == 0 → 43, fdelta 4), frozen at the view edge. The player
-  dies only if their path collides with the (now frozen) yeti. The `+0x18` chase-state
-  path (frame 46/47 toggle at 0x4046b8) is dead — nothing sets `+0x18` to 1.
-- **Wake-up animation** (after a kill, times vs `desc+0x20` = kill timestamp, jump
-  table 0x4046c4): 50 →(immediate)→ 51 →(> 499 ms)→ 52 →(> 700 ms)→ 53 →
-  (> 1000 ms)→ 54 →(immediate)→ 55 →(> 2999 ms)→ 42/43 (sleep).
+- **Self-gate (disasm 0x404471-0x4044d8)** — pass condition and sentinel:
+  - type 5: `y > -2000` (0xF830) (`cmp $0xf830,%ax; jle fail`, 0x404486) → vy = -10
+  - type 6: `y < 32000` (0x7D00) (0x40449b) → vy = +26
+  - type 7: `x > 49440` (0xC180) (0x4044b0) → vx = -16
+  - type 8: `x < 16000` (0x3E80) (0x4044c9) → vx = +16
+  (the other velocity component is 0; pass falls through to apply 0x4045d8)
+- **Self-gate fail (0x4044dd):** if there is no live player (`c72c == 0`) → idle
+  (vx = vy = 0). Otherwise the **player threshold** (player +0x40/+0x42, disasm
+  0x4044f2-0x404533):
+  - type 5: `player.y < -2000` (jl) — unreachable (player y starts at 0, grows +y)
+  - type 6 (yeti at y=32060): `player.y > 32000` (jg, 0x404508) — the ~2000 m rule
+  - type 7 (yeti at x=49476): `player.x < 49440` (jl) — true for the whole course
+  - type 8 (yeti at x=16060): `player.x > 16000` (jle → idle, i.e. strictly >) —
+    unreachable
+  Threshold met → **trigger** (0x404539); else apply idle (vx = vy = 0).
+- **On trigger (0x404539-0x4045d3):** dx_true = player.x − yeti.x, dy_true =
+  player.y − yeti.y. Teleport only where the true separation exceeds a full view
+  (viewW = `(short)c5f0`, viewH = `(short)c6d8`), independently per axis:
+  |dx_true| > viewW → yeti.x = player.x ∓ viewW; |dy_true| > viewH → yeti.y =
+  player.y ∓ viewH. Then `vx = clamp(dx_true, ±16)`, `vy = clamp(dy_true, ±26)`
+  (0x40459c-0x4045c3), `fdelta = 1` (0x404617), `snd_play(c6f0)` (wave pair id 9 —
+  silent, no WAVE resources exist). The "velocity-mixing" code at 0x4045f4-0x404613
+  (ratio-rescales of desc+0x1a/+0x1c) is **dead** — the unconditional stores at
+  0x404621/0x404628 overwrite it.
+- **Frame selection on apply (0x40462c-0x4046c2):** walking frames toggle between
+  a 2-frame pair each tick (result = N if desc+0x10 was already N, else N+1):
+  vy < 0 → 48/49; vx < 0 → 44/45; vx > 0 || vy > 0 → 46/47 (live chase path);
+  idle (0,0) → rand(10) (0x404677): 90% frame 42 (fdelta 1), 10% frame 43
+  (fdelta 4).
+- **Chase is continuous, not one-shot** — the trigger re-fires every tick while
+  the player threshold holds:
+  - **type 6** (spawn (0, 32060)): self-gate fails at spawn (32060 ≥ 32000) →
+    dormant (idle bob) until the player passes y = 32000 (2000 m). Thereafter the
+    threshold (`player.y > 32000`) stays true for the rest of the run, so the
+    trigger re-arms every tick; |dy_true| is normally < viewH, so usually no
+    teleport — the yeti just re-clamps to vy = ±26 / vx = ±16 (sign of the true
+    separation, so it wraps around and tracks the player's y/x). If the player
+    pulls a full view clear, it teleports to player.y − viewH and
+    chases at +26/tick (faster than the player's max 24/tick).
+  - **type 7** (spawn (49476, 0)): self-gate **passes** at spawn (49476 > 49440) →
+    walks left at vx = -16 from the first tick; after ~2 ticks (x ≤ 49440) the
+    self-gate fails and the trigger (player.x < 49440, always true) re-fires every
+    tick — while |dx_true| > viewW it teleports the yeti to player.x + viewW, then
+    chases at 16/tick (2× the player's max steer 8/tick). It permanently
+    reappears one view to the right of the player.
+  - **type 5** (spawn (0, −2060)): self-gate fails (−2060 ≤ −2000) and the trigger
+    (`player.y < −2000`) can never fire → **permanently dormant** (idle-bobs at
+    −128.75 m, 3.75 m above the −2000 threshold).
+  - **type 8** (spawn (16060, 0)): self-gate fails (16060 ≥ 16000) and the trigger
+    (`player.x > 16000`) can never fire → **permanently dormant**.
+- **Idle bob:** vx = vy = 0 → z oscillates via fdelta (gate_step integrates
+  z += fdelta each tick; cruise decrements fdelta while z > 0, else zeroes z/fdelta
+  at 0x404378-0x40438c): fdelta 1 → z: 0,1,1,0 (4-tick cycle); fdelta 4 (frame 43)
+  → parabolic z peaking at 10 over 10 ticks. Airborne (z ≠ 0) skips all ground
+  logic (0x404390 → frame store + ret at 0x4046b8).
+- **Wake-up animation (LIVE post-kill states)** — on a kill, `game_collide` sets
+  desc+0x10 = 0x32 (50) and desc+0x20 = c698 (GetTickCount at death); states 50-55
+  then run (0x404396-0x404470, jump table 0x4046c4; elapsed = c698 − desc+0x20 ms,
+  so the thresholds are real milliseconds):
+  50 →(immediate)→ 51 →(≥ 500 ms, else loops back to 50)→ 52 →(> 700 ms)→ 53 →
+  (> 1000 ms)→ 54 →(immediate)→ 55 →(≥ 3000 ms, else loops back to 54)→ 42 (sleep).
 - **Kill** (`game_collide` 0x403a00, case 5-8, `param_2 == c72c`): `snd_play(c6e0)`;
   group-split if flagged; **`game_entity_die(player)`**; yeti reset: desc frame = 0x32
   (50, wake anim), steer = 0, vy = 0, entity speed = 0, desc+0x20 = c698.
@@ -855,12 +917,16 @@ trigger: a **self-gate** on the yeti's own position (0x404471-0x4044d8), then th
 
 - **File:** `entpack.ini` (c084) in the CWD; **section** `[Ski]` (c080).
 - **Read:** `GetPrivateProfileStringA("Ski", key, "" (c788), buf, 0x100, "entpack.ini")`.
-- **Format:** space-separated signed longs, one trailing space per entry (`"%ld "`
-  wsprintf, c0ec) — e.g. `SS= -12345  -13000  ...`; max **10** entries, kept in
-  **descending** order (negated times → index 0 = fastest).
-- **Parse:** skip spaces, read until space/NUL, `_atoi` (0x406cf8), ≤10 values.
-- **Insert:** first index where `existing < new` (descending); if none (would be 10th
-  of 10) → did not qualify; else shift right, drop last, insert.
+- **Format:** one line of space-separated signed longs, each entry emitted as
+  `"%ld "` (c0ec) — e.g. `SS=-12345 -13000 ` (single spaces, trailing space; no
+  names); max **10** entries, **ascending** in stored value (times stored negated
+  → index 0 = fastest time).
+- **Parse:** skip spaces, read until space/NUL, `_atoi` (0x406cf8), ≤10 values;
+  each token is a value (no name handling).
+- **Insert:** first index i where `stored[i] > new` (stored ascending). Fewer than
+  10 stored → plain insert (count++); exactly 10 stored → shift right, drop the
+  last, insert; new value worse than all (index 10) → **did not qualify** — nothing
+  stored, dialog shows "try again".
 - **Write:** `WritePrivateProfileStringA("Ski", key, buf, "entpack.ini")`.
 - **Dialog:** MessageBoxA(owner = c6c8, body, "High Scores" (RT 15), 0); body =
   entries joined by `\n` (0x0a); times formatted with `util_fmt_time(-value)`, FS as
@@ -936,14 +1002,19 @@ picker; the area budget `c6fc` (total on-screen sprite area) gates each picker:
 | zone (spawn pos) | picker | rule |
 |---|---|---|
 | SS lane: x ∈ [-576, -320] and y ∈ [640, 8640] ([40, 540] m) | `game_spawn_pick_speed` 0x402770 | deterministic: `c6fc <= c748/64` → type 11 (0xb), else none |
-| GS lane: x ∈ [320, 512] and y ∈ [640, 16640] ([40, 1040] m) | `game_spawn_pick_narrow` 0x4027a0 | `c6fc > c748/16` → none; else r = rand(64): r == 0 → type 2 (dog), else type 0xf (drift) |
-| FS lane: x ∈ [-160, 160] and y ∈ [640, 16640] ([40, 1040] m) | `game_spawn_pick_mid` 0x4027e0 | `c6fc > c748/32` → none; else r = rand(100): <2 → 10, <20 → 0xd, <50 → 0xf, <60 → 0xb, <80 → 0x10 (banner), else none |
+| GS lane: x ∈ [320, 512] and y ∈ [640, 16640] ([40, 1040] m) | `game_spawn_pick_narrow` 0x4027a0 | `c6fc > c748/16` → none; else r = rand(64): r == 0 → type 2 (dog) [1/64], else type 0xd (13, pine) [63/64] (`neg %ax; sbb %eax,%eax; and $0xb,%eax; add $0x2,%eax`, 0x4027be-0x4027d3) |
+| FS lane: x ∈ [-160, 160] and y ∈ [640, 16640] ([40, 1040] m) | `game_spawn_pick_mid` 0x4027e0 | `c6fc > c748/32` → none; else r = rand(100): <2 → 10, <20 → 0xd, <50 → 0xf, <60 → 0xb, <80 → 0x10 (16, banner), else 0xe (14, rock) (`cmp $0x50; sbb; and $0xfe,%al; add $0x10`, 0x402838-0x402840) |
 | everywhere else (off-course) | `game_spawn_pick_wide` 0x4026f0 | `c6fc > c748/32` → none; else r = rand(1000): <50 → 10 (pine), <500 → 0xd (pine13), <700 → 0xf (drift), <750 → 0xb, <950 → 0xe (rock), <970 → 0x10 (banner), <990 → 2 (dog), else 1 (AI skier) |
 
-Type 0xb (11) and 0xa (10) are pine/green-tree variants (spawn frames a22c:
-type→frame [6,22,27,31,39,42,42,42,42,56,60]); types ≥ 0xb get their column from
-`game_sprite_frame` 0x402850 (0xd → rand(8) → cols 49/50/51; 0xe → rand(4) → 45/46;
-0xf → rand(3) → 47/48; 0x10 → col 52; 0xb → col 27; 0xc and ≥ 0x11 → assert).
+Type 0xa (10) is the green pine (berries) — a22c (type→initial frame, types 0-10:
+[6,22,27,31,39,42,42,42,42,56,60]) gives frame 60 → col 49. Type 0xb (11) is **not**
+a tree: it is the snowdrift-band background tile (col 27 — via the table below,
+a22c only covers types 0-10). Types ≥ 0xb get their column from
+`game_sprite_frame` 0x402850 (jump table 0x4028c8: 0xb → col 27; 0xc → assert 0x623
+(unreachable); 0xd → rand(8): 0→50 (bare fir), 1→51 (large green pine), else 49
+(green pine); 0xe → rand(4): 0→46 (mossy rock), else 47 (small snowdrift);
+0xf → rand(3): 0→48 (large snowdrift), else 49 (green pine); 0x10 → col 52
+(rainbow banner)).
 Finally, once per tick: `if (rand_range(0x29a) == 0)` (1/666) → spawn a snowboarder
 (type 3, frame 0x1f) via 0x402350(e, 2).
 
@@ -970,13 +1041,18 @@ Finally, once per tick: `if (rand_range(0x29a) == 0)` (1/666) → spawn a snowbo
 
 ### 1. RNG — algorithm, seed, call order
 
-**The RNG is a custom 32-bit LCG in the game code — NOT the CRT rand** (the function
-map's "CRT rand" classification of 0x406cda is wrong; the constants are the classic
-Borland/Turbo-C rand pair and nothing in the import table is used):
+**The RNG is the MSVC CRT rand, statically linked into the image** (the function
+map's "CRT" classification of 0x406cd0/0x406cda is **correct** — verified: the
+import table contains no rand/srand; the constants 0x343fd = 214013 and
+0x269ec3 = 2531011 are exactly the classic MSVC CRT rand constants, i.e. the
+compiler inlined `_rand`/`_srand` from the static CRT):
 
-- **Algorithm** (`FUN_00406cda` 0x406cda, disasm-verified):
-  `c16c = c16c * 0x343fd + 0x269ec3; return (c16c >> 16) & 0x7fff;`
-  → 15-bit output, range 0..32767. Entire RNG state = the single u32 `c16c`.
+- **Algorithm** (`FUN_00406cda` 0x406cda, disasm-verified —
+  `imul $0x343fd,%eax,%eax; add $0x269ec3,%eax; mov %eax,0x40c16c; sar $0x10,%eax;
+  and $0x7fff,%eax` = MSVC `seed = seed*214013L+2531011L; return
+  (unsigned)(seed/65536)%32768`): `c16c = c16c * 0x343fd + 0x269ec3; return
+  (c16c >> 16) & 0x7fff;` → 15-bit output, range 0..32767. Entire RNG state = the
+  single u32 `c16c`.
 - **Seed setter** (`FUN_00406cd0` 0x406cd0): `c16c = seed;`
 - **Seed site** (`game_reset` 0x404970, first two lines):
   `c698 = GetTickCount(); FUN_00406cd0(c698);` — i.e. **seed = GetTickCount() at
@@ -992,9 +1068,10 @@ Borland/Turbo-C rand pair and nothing in the import table is used):
    0x4028e0 → AI anim functions (only when their frame condition hits):
    type 1: rand(12) then rand(3); type 2 (dog): rand(3)/rand(0x20)/rand(100) by frame;
    type 3 (snowboarder): rand(10); type 10 (pine): rand(100), rand(2), rand(10).
-2. Gate stepping — `game_gate_scan` ×4 + `game_gate_update` (moving list) → bench
-   0x404290: rand(1000) (only when a bench exits and a snowboarder may spawn);
-   yeti cruise 0x404350: rand(10) (only in the idle, non-moving branch).
+2. Gate stepping — `game_gate_scan` ×4 (c630/c5e0/c658/c738) + `game_gate_update`
+   (c720 moving list) → bench 0x404290: rand(1000) (only when a **spawned frame-39
+   bench** is in the middle band — 0x404305); yeti cruise 0x404350: rand(10) (only
+   in the idle, non-moving branch — 0x404677).
 3. Collision pass — no rand.
 4. Spawn bands — per 60 units crossed: picker rand (rand(1000) wide / rand(100) mid /
    rand(64) narrow / none for speed) + `game_spawn_pos` rand(c6d8)/rand(c5f0) +
