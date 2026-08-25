@@ -67,7 +67,7 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x4024f0 | game_spawn_pos | FUN_004024f0 | 192 | GAME | compute spawn position per direction (rand over client w/h: c5f0/c6d8) |
 | 0x4025c0 | game_spawn | FUN_004025c0 | 213 | GAME | spawn dispatcher: picks a type via one of 4 pickers by position/speed band; type<0xb via game_entity_new+spawn_frame_table (a22c), type>=0xb via game_entity_new_col+game_sprite_frame; 0x12 = no spawn |
 | 0x4026a0 | game_entity_new_col | FUN_004026a0 | 78 | GAME | new entity + sprite column (type 0..0x11, col from game_sprite_frame) |
-| 0x4026f0 | game_spawn_pick_wide | FUN_004026f0 | 122 | GAME | type pick (wide zone): weighted rand(1000) over {2,10,11,13,14,15,16}; 0x12 when view full (c748/32 < c6fc) |
+| 0x4026f0 | game_spawn_pick_wide | FUN_004026f0 | 122 | GAME | type pick (wide zone): r=rand(1000): <50→10, <500→0xd, <700→0xf, <750→0xb, <950→0xe, <970→0x10, <990→0x12 (none), ≥990→2 (dog); 0x12 when view full (c748/32 ≤ c6fc); no type-1 outcome |
 | 0x402770 | game_spawn_pick_speed | FUN_00402770 | 37 | GAME | type pick (speed zone): 11 or 0x12 from speed threshold (c748/64 vs c6fc) |
 | 0x4027a0 | game_spawn_pick_narrow | FUN_004027a0 | 52 | GAME | type pick (GS lane): r = rand(64): r == 0 → 2 (dog, 1/64), else 0xd (13, 63/64); 0x12 when view full (disasm 0x4027be-0x4027d3: `neg %ax; sbb %eax,%eax; and $0xb,%eax; add $0x2,%eax`) |
 | 0x4027e0 | game_spawn_pick_mid | FUN_004027e0 | 100 | GAME | type pick (FS lane): r = rand(100): <2→10, <20→0xd, <50→0xf, <60→0xb, <80→0x10 (16, banner), else 0xe (14, rock); 0x12 when view full (disasm 0x402838-0x402840: `cmp $0x50; sbb; and $0xfe,%al; add $0x10`) |
@@ -1004,7 +1004,7 @@ picker; the area budget `c6fc` (total on-screen sprite area) gates each picker:
 | SS lane: x ∈ [-576, -320] and y ∈ [640, 8640] ([40, 540] m) | `game_spawn_pick_speed` 0x402770 | deterministic: `c6fc <= c748/64` → type 11 (0xb), else none |
 | GS lane: x ∈ [320, 512] and y ∈ [640, 16640] ([40, 1040] m) | `game_spawn_pick_narrow` 0x4027a0 | `c6fc > c748/16` → none; else r = rand(64): r == 0 → type 2 (dog) [1/64], else type 0xd (13, pine) [63/64] (`neg %ax; sbb %eax,%eax; and $0xb,%eax; add $0x2,%eax`, 0x4027be-0x4027d3) |
 | FS lane: x ∈ [-160, 160] and y ∈ [640, 16640] ([40, 1040] m) | `game_spawn_pick_mid` 0x4027e0 | `c6fc > c748/32` → none; else r = rand(100): <2 → 10, <20 → 0xd, <50 → 0xf, <60 → 0xb, <80 → 0x10 (16, banner), else 0xe (14, rock) (`cmp $0x50; sbb; and $0xfe,%al; add $0x10`, 0x402838-0x402840) |
-| everywhere else (off-course) | `game_spawn_pick_wide` 0x4026f0 | `c6fc > c748/32` → none; else r = rand(1000): <50 → 10 (pine), <500 → 0xd (pine13), <700 → 0xf (drift), <750 → 0xb, <950 → 0xe (rock), <970 → 0x10 (banner), <990 → 2 (dog), else 1 (AI skier) |
+| everywhere else (off-course) | `game_spawn_pick_wide` 0x4026f0 | `c6fc > c748/32` → none; else r = rand(1000): <50 → 10 (pine), <500 → 0xd (pine13), <700 → 0xf (drift), <750 → 0xb, <950 → 0xe (rock), <970 → 0x10 (banner), <990 → 0x12 (18, no spawn), ≥990 → 2 (dog) — final band is `cmp $0x3de; sbb %eax,%eax; add $0x2,%eax` (0x402760-0x402769): r<990 → 0x12, else 2; **no AI-skier (type 1) outcome in this picker** (disasm-verified 2026-08-25) |
 
 Type 0xa (10) is the green pine (berries) — a22c (type→initial frame, types 0-10:
 [6,22,27,31,39,42,42,42,42,56,60]) gives frame 60 → col 49. Type 0xb (11) is **not**
