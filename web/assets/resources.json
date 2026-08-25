@@ -1,0 +1,562 @@
+{
+ "bitmaps": {
+  "1": {
+   "w": 16,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_001.png"
+  },
+  "2": {
+   "w": 16,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_002.png"
+  },
+  "3": {
+   "w": 24,
+   "h": 28,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_003.png"
+  },
+  "4": {
+   "w": 24,
+   "h": 28,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_004.png"
+  },
+  "5": {
+   "w": 16,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_005.png"
+  },
+  "6": {
+   "w": 24,
+   "h": 28,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_006.png"
+  },
+  "7": {
+   "w": 24,
+   "h": 28,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_007.png"
+  },
+  "8": {
+   "w": 24,
+   "h": 28,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_008.png"
+  },
+  "9": {
+   "w": 24,
+   "h": 28,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_009.png"
+  },
+  "10": {
+   "w": 24,
+   "h": 28,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_010.png"
+  },
+  "11": {
+   "w": 24,
+   "h": 28,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_011.png"
+  },
+  "12": {
+   "w": 32,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_012.png"
+  },
+  "13": {
+   "w": 32,
+   "h": 24,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_013.png"
+  },
+  "14": {
+   "w": 32,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_014.png"
+  },
+  "15": {
+   "w": 28,
+   "h": 31,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_015.png"
+  },
+  "16": {
+   "w": 28,
+   "h": 31,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_016.png"
+  },
+  "17": {
+   "w": 28,
+   "h": 34,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_017.png"
+  },
+  "18": {
+   "w": 32,
+   "h": 26,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_018.png"
+  },
+  "19": {
+   "w": 32,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_019.png"
+  },
+  "20": {
+   "w": 31,
+   "h": 24,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_020.png"
+  },
+  "21": {
+   "w": 25,
+   "h": 31,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_021.png"
+  },
+  "22": {
+   "w": 25,
+   "h": 31,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_022.png"
+  },
+  "23": {
+   "w": 12,
+   "h": 24,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_023.png"
+  },
+  "24": {
+   "w": 12,
+   "h": 24,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_024.png"
+  },
+  "25": {
+   "w": 12,
+   "h": 24,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_025.png"
+  },
+  "26": {
+   "w": 12,
+   "h": 24,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_026.png"
+  },
+  "27": {
+   "w": 64,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_027.png"
+  },
+  "28": {
+   "w": 24,
+   "h": 30,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_028.png"
+  },
+  "29": {
+   "w": 22,
+   "h": 29,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_029.png"
+  },
+  "30": {
+   "w": 21,
+   "h": 29,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_030.png"
+  },
+  "31": {
+   "w": 24,
+   "h": 24,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_031.png"
+  },
+  "32": {
+   "w": 24,
+   "h": 24,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_032.png"
+  },
+  "33": {
+   "w": 21,
+   "h": 15,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_033.png"
+  },
+  "34": {
+   "w": 21,
+   "h": 15,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_034.png"
+  },
+  "35": {
+   "w": 19,
+   "h": 19,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_035.png"
+  },
+  "36": {
+   "w": 19,
+   "h": 19,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_036.png"
+  },
+  "37": {
+   "w": 26,
+   "h": 30,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_037.png"
+  },
+  "38": {
+   "w": 20,
+   "h": 30,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_038.png"
+  },
+  "39": {
+   "w": 25,
+   "h": 31,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_039.png"
+  },
+  "40": {
+   "w": 30,
+   "h": 29,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_040.png"
+  },
+  "41": {
+   "w": 32,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_041.png"
+  },
+  "42": {
+   "w": 32,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_042.png"
+  },
+  "43": {
+   "w": 25,
+   "h": 29,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_043.png"
+  },
+  "44": {
+   "w": 29,
+   "h": 25,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_044.png"
+  },
+  "45": {
+   "w": 23,
+   "h": 11,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_045.png"
+  },
+  "46": {
+   "w": 16,
+   "h": 11,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_046.png"
+  },
+  "47": {
+   "w": 16,
+   "h": 4,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_047.png"
+  },
+  "48": {
+   "w": 24,
+   "h": 8,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_048.png"
+  },
+  "49": {
+   "w": 28,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_049.png"
+  },
+  "50": {
+   "w": 22,
+   "h": 27,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_050.png"
+  },
+  "51": {
+   "w": 32,
+   "h": 64,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_051.png"
+  },
+  "52": {
+   "w": 32,
+   "h": 8,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_052.png"
+  },
+  "53": {
+   "w": 93,
+   "h": 57,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_053.png"
+  },
+  "54": {
+   "w": 52,
+   "h": 10,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_054.png"
+  },
+  "55": {
+   "w": 92,
+   "h": 30,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_055.png"
+  },
+  "56": {
+   "w": 63,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_056.png"
+  },
+  "57": {
+   "w": 42,
+   "h": 27,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_057.png"
+  },
+  "58": {
+   "w": 42,
+   "h": 27,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_058.png"
+  },
+  "59": {
+   "w": 50,
+   "h": 29,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_059.png"
+  },
+  "60": {
+   "w": 50,
+   "h": 29,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_060.png"
+  },
+  "61": {
+   "w": 40,
+   "h": 36,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_061.png"
+  },
+  "62": {
+   "w": 44,
+   "h": 36,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_062.png"
+  },
+  "63": {
+   "w": 40,
+   "h": 35,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_063.png"
+  },
+  "64": {
+   "w": 24,
+   "h": 64,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_064.png"
+  },
+  "65": {
+   "w": 26,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_065.png"
+  },
+  "66": {
+   "w": 26,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_066.png"
+  },
+  "67": {
+   "w": 26,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_067.png"
+  },
+  "68": {
+   "w": 32,
+   "h": 48,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_068.png"
+  },
+  "69": {
+   "w": 32,
+   "h": 48,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_069.png"
+  },
+  "70": {
+   "w": 32,
+   "h": 48,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_070.png"
+  },
+  "71": {
+   "w": 32,
+   "h": 48,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_071.png"
+  },
+  "72": {
+   "w": 32,
+   "h": 48,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_072.png"
+  },
+  "73": {
+   "w": 32,
+   "h": 48,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_073.png"
+  },
+  "74": {
+   "w": 32,
+   "h": 48,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_074.png"
+  },
+  "75": {
+   "w": 32,
+   "h": 48,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_075.png"
+  },
+  "76": {
+   "w": 32,
+   "h": 48,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_076.png"
+  },
+  "77": {
+   "w": 32,
+   "h": 48,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_077.png"
+  },
+  "78": {
+   "w": 32,
+   "h": 48,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_078.png"
+  },
+  "79": {
+   "w": 32,
+   "h": 48,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_079.png"
+  },
+  "80": {
+   "w": 32,
+   "h": 48,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_080.png"
+  },
+  "81": {
+   "w": 32,
+   "h": 48,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_081.png"
+  },
+  "82": {
+   "w": 16,
+   "h": 8,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_082.png"
+  },
+  "83": {
+   "w": 22,
+   "h": 27,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_083.png"
+  },
+  "84": {
+   "w": 22,
+   "h": 27,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_084.png"
+  },
+  "85": {
+   "w": 22,
+   "h": 27,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_085.png"
+  },
+  "86": {
+   "w": 8,
+   "h": 11,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_086.png"
+  },
+  "87": {
+   "w": 28,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_087.png"
+  },
+  "88": {
+   "w": 28,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_088.png"
+  },
+  "89": {
+   "w": 28,
+   "h": 32,
+   "bpp": 4,
+   "file": "web/assets/sprites/bmp_089.png"
+  }
+ },
+ "strings": {
+  "1": [
+   "",
+   "SkiFree",
+   "Ski Paused ... Press F3 to continue",
+   "Time:",
+   "Dist:",
+   "Speed:",
+   "Style:",
+   "00:00:00.00",
+   " 0000m",
+   " 0000m/s",
+   "0000000",
+   "%2u:%2.2u:%2.2u.%2.2u",
+   "%5.2dm",
+   "%5.2dm/s",
+   "%7ld",
+   "High Scores"
+  ],
+  "2": [
+   " <-- that's you!",
+   " <-- try again!"
+  ]
+ }
+}

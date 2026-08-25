@@ -1,5 +1,4 @@
 build/
-web/assets/
 decompile/ghidra-project/
 *.pyc
 __pycache__/

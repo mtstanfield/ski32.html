@@ -421,3 +421,145 @@ Full map in `decompile/ghidra/globals.json` (132 entries: every game data symbol
 | +0x4c | flags byte: 1=in-list, 2=group, 4=rect-cached, 8=dead, 0x10=in-group, 0x20=col-changed |
 
 Template (zero-init, +0x1c=0x40) at `c030`; pool 100×80B at `c648`.
+
+## Extracted resources (M1 — 89 sprites + string tables → `web/assets/`)
+
+`harness/extract_resources.py` pulls all 89 RT_BITMAP sprites and both RT_STRING groups out of
+`original/ski32.exe` and writes `web/assets/sprites/bmp_NNN.png` (ids 1-89) +
+`web/assets/resources.json` (per-bitmap `{w, h, bpp, file}` + both string groups). Verified
+89/89, exit 0.
+
+### DIB format (as stored in `.rsrc`)
+
+Every leaf is a 4-bit DIB, but **not** stock BMP:
+- 40-byte `BITMAPINFOHEADER` (`biSize=40`, `biCompression=0`, `biPlanes=1`, `biBitCount=4`,
+  `biSizeImage=0`, `biClrUsed` = 16 on 68 entries / 0 on 21).
+- Palette: **16 × 4-byte RGBQUAD** (64 bytes; the standard VGA 16-color palette, reserved byte 0) —
+  not 3-byte RGBTRIPLE.
+- Pixel rows 4-byte aligned, stored **bottom-up** (all heights positive); rows MSB-first.
+- Payload = `40 + 64 + rowsz·h`, plus a trailing 0/8-byte pad (8 bytes on exactly 3 entries).
+- Leaf data entries in this PE store the **file offset** (not an RVA) — the extractor validates
+  each of three candidate offsets (file-off, `+base`, RVA-mapped) against the header + size.
+
+### RT_STRING groups
+
+Format: length-prefixed UTF-16LE entries `[u8 len][u8 pad][2·len chars]` — **not** a stock
+STRINGTABLE (no leading count). Group 1 terminates after 16 entries; group 2 after 2 (then zero pad).
+
+- **Group 1** (16 entries, first empty): `''`, `SkiFree`, `Ski Paused ... Press F3 to continue`,
+  `Time:`, `Dist:`, `Speed:`, `Style:`, `00:00:00.00`, ` 0000m`, ` 0000m/s`, `0000000`,
+  `%2u:%2.2u:%2.2u.%2.2u`, `%5.2dm`, `%5.2dm/s`, `%7ld`, `High Scores`
+- **Group 2** (2 entries): ` <-- that's you!`, ` <-- try again!`
+
+(17 distinct named strings total; the score suffixes live in group 2, the UI/format strings in
+group 1. This matches the 17-string `.rdata` STRINGTABLE documented above, which is the same set.)
+
+### Sprite inventory (89)
+
+Frame-set membership is from the runtime `frame_col_table` (`a1ac`, 64×u16 frame→column) cross-
+checked against `spawn_frame_table` (`a22c`, type 0-10 → initial frame), `game_sprite_frame`
+(type 11-16 → frame), and `game_startpoles_spawn` (type 0x11 → **direct** columns 53-56 via
+`game_entity_new_col`). Entity types 0-17; type 0 = player, 0x12 = no-spawn. Identity is
+visual (see `web/assets/sprites/`). "col" = bitmap id = `LoadBitmapA` id.
+
+| id | w×h | bpp | identity | notes (frame-set membership) |
+|---|---|---|---|---|
+| 1 | 16×32 | 4 | player, rear view standing | **player set = cols 1-22 (frames 0-21)**; back/start view, T-arms, dashed box |
+| 2 | 16×32 | 4 | player, side right, skis up | turning/airborne (skis tilted) |
+| 3 | 24×28 | 4 | player, side right, crouch | turning (skis tilted) |
+| 4 | 24×28 | 4 | player, side right, glide | skis flat |
+| 5 | 16×32 | 4 | player, side left, skis up | turning/airborne |
+| 6 | 24×28 | 4 | player, side left, crouch | turning (skis tilted) |
+| 7 | 24×28 | 4 | player, side left, glide | skis flat |
+| 8 | 24×28 | 4 | player, side left, glide | skis flat |
+| 9 | 24×28 | 4 | player, side right, glide | skis flat |
+| 10 | 24×28 | 4 | player, side right, glide | skis flat |
+| 11 | 24×28 | 4 | player, side right, deep crouch | skis flat |
+| 12 | 32×32 | 4 | "OUCH!" crash burst | hat+skis+poles flying, snow spray (frame 11) |
+| 13 | 32×24 | 4 | player crashed (fallen) | on back, skis crossed |
+| 14 | 32×32 | 4 | player arms-up (victory) | legs apart, skis crossed |
+| 15 | 28×31 | 4 | player arms-up (victory) | skis flat |
+| 16 | 28×31 | 4 | player arms-up (victory) | mirrored of 15 |
+| 17 | 28×34 | 4 | player rear view arms-up | skis vertical, snow spray |
+| 18 | 32×26 | 4 | player tumbling | mid-flip crash |
+| 19 | 32×32 | 4 | player stuck in gate | caught between 2 poles, up/down arrows |
+| 20 | 31×24 | 4 | player somersault | upside-down crash |
+| 21 | 25×31 | 4 | player crouch turning, right | arm raised |
+| 22 | 25×31 | 4 | player crouch turning, left | arms raised |
+| 23 | 12×24 | 4 | arrow signpost, left | blue sign, white left arrow, on pole; static |
+| 24 | 12×24 | 4 | arrow signpost, right | red sign, white right arrow, on pole; static |
+| 25 | 12×24 | 4 | smiley signpost (good) | green smiley on pole; static |
+| 26 | 12×24 | 4 | frown signpost (bad) | blue angry face on pole; static |
+| 27 | 64×32 | 4 | snowdrift band | faint gray humps; background tile; static |
+| 28 | 24×30 | 4 | AI skier crouch, right | **AI-skier set = cols 28-32 (frames 22-26)**, type 1; magenta suit, yellow face |
+| 29 | 21×29 | 4 | AI skier crouch, right | |
+| 30 | 21×29 | 4 | AI skier crouch, right | |
+| 31 | 24×24 | 4 | AI skier crashed | fallen, hat off |
+| 32 | 24×24 | 4 | AI skier tumbling | mid-flip |
+| 33 | 21×15 | 4 | dog walking, right | **dog set = cols 33-36 (frames 27-30)**, type 2; gray |
+| 34 | 21×15 | 4 | dog walking, right | |
+| 35 | 19×19 | 4 | dog "WOOF!" | barking, text |
+| 36 | 19×19 | 4 | dog "WOOF!" | |
+| 37 | 26×30 | 4 | snowboarder riding | **snowboarder set = cols 37-44 (frames 31-38)**, type 3; green shirt, red board |
+| 38 | 20×30 | 4 | snowboarder crouch | |
+| 39 | 25×31 | 4 | snowboarder turning | |
+| 40 | 30×29 | 4 | snowboarder flipping | |
+| 41 | 32×32 | 4 | snowboarder crash | board angled |
+| 42 | 32×32 | 4 | snowboarder flip | board up |
+| 43 | 25×29 | 4 | snowboarder flipping | |
+| 44 | 29×25 | 4 | snowboarder horizontal | |
+| 45 | 23×11 | 4 | rock (boulder) | gray speckled; static |
+| 46 | 16×11 | 4 | rock (mossy) | gray w/ cyan-green moss; static |
+| 47 | 16×4 | 4 | snowdrift (small) | faint gray outline; background |
+| 48 | 24×8 | 4 | snowdrift (large) | faint gray outline; background |
+| 49 | 28×32 | 4 | green pine (berries) | **green-pine set = cols {49,87,88,89} (frames 60-63)**, type 10 |
+| 50 | 32×24 | 4 | bare fir (winter) | dark blue leafless; not in frame table |
+| 51 | 32×64 | 4 | large green pine | not in frame table |
+| 52 | 32×8 | 4 | rainbow banner | horizontal stripes (blue/green/red/magenta); static |
+| 53 | 93×57 | 4 | "Ski Free" logo | Copyright 1991 by Chris Pirih; **start banner** (type 0x11, col 53) |
+| 54 | 52×10 | 4 | "Version 1.04" | start banner (type 0x11, col 54) |
+| 55 | 92×30 | 4 | "Use NumPad [0-9]…" | start banner (type 0x11, col 55) |
+| 56 | 63×32 | 4 | "F2 = Restart, F3 = Pause" | start banner (type 0x11, col 56) |
+| 57 | 42×27 | 4 | "Start" sign, right | green, right arrow; static |
+| 58 | 42×27 | 4 | "Start" sign, left | green, left arrow; static |
+| 59 | 50×29 | 4 | "Finish" sign, right | blue/purple checkered, right arrow; static |
+| 60 | 50×29 | 4 | "Finish" sign, left | blue/purple checkered, left arrow; static |
+| 61 | 40×36 | 4 | "Slalom" sign | yellow-green, diagonal arrow; static |
+| 62 | 44×36 | 4 | "Tree Slalom" sign | cyan, diagonal arrow; static |
+| 63 | 40×35 | 4 | "Free-style" sign | green, down arrow; static |
+| 64 | 24×64 | 4 | tall gate pole | black T-pole, blue emblem, cyan base; static |
+| 65 | 26×32 | 4 | bench: AI skier + snowboarder | **bench/gate set = cols 65-67 (frames 39-41)**, type 4; 3-frame exit (65→66→67) |
+| 66 | 26×32 | 4 | bench: AI skier | |
+| 67 | 26×32 | 4 | bench: empty | |
+| 68 | 32×48 | 4 | yeti arms-up | **yeti set = cols 68-81 (frames 42-55)**; types 5-8 (+13, 16) share it; front view |
+| 69 | 32×48 | 4 | yeti arms-up (shouting) | |
+| 70 | 32×48 | 4 | yeti walking, front | |
+| 71 | 32×48 | 4 | yeti walking, front | |
+| 72 | 32×48 | 4 | yeti walking, front | |
+| 73 | 32×48 | 4 | yeti walking, front | |
+| 74 | 32×48 | 4 | yeti walking, back | |
+| 75 | 32×48 | 4 | yeti walking, back | |
+| 76 | 32×48 | 4 | yeti grappling player | red-suited skier (type 13 → cols 75-77) |
+| 77 | 32×48 | 4 | yeti grappling player | |
+| 78 | 32×48 | 4 | yeti grappling player | (type 16 → col 78) |
+| 79 | 32×48 | 4 | yeti, pole overhead | crossbar + green (startpole frame 53) |
+| 80 | 32×48 | 4 | yeti, chest mark | (startpole frame 54) |
+| 81 | 32×48 | 4 | yeti, chest mark | (startpole frame 55) |
+| 82 | 16×8 | 4 | snow patch | small cyan blob; static |
+| 83 | 22×27 | 4 | frosted fir (blue) | **frosted-fir set = cols 83-85 (frames 56-59→83,84,85,84)**, type 9; 3-sprite sway |
+| 84 | 22×27 | 4 | frosted fir (blue) | |
+| 85 | 22×27 | 4 | frosted fir (blue) | |
+| 86 | 8×11 | 4 | snowflake/plant | small blue bloom on stem; static |
+| 87 | 28×32 | 4 | green pine | green-pine set (frames 61-63) |
+| 88 | 28×32 | 4 | green pine | |
+| 89 | 28×32 | 4 | green pine | (type 9 start frame 56 → col 83; type 10 start frame 60 → col 49) |
+
+**Set summary** — player 1-22 (22), arrow-signs 23-24, smiley-signs 25-26, snowdrift-band 27,
+AI-skier 28-32 (5), dog 33-36 (4), snowboarder 37-44 (8), rocks 45-46, snowdrifts 47-48,
+trees {49,50,51} + frosted-fir 83-85 + green-pine 87-89, banner 52, start-banners 53-56,
+course-signs 57-63, tall-pole 64, bench 65-67 (3), yeti 68-81 (14), snow-patch 82, snowflake 86.
+
+**Extraction stats:** 89/89 bitmaps, all 4-bpp (1- and 8-bpp present in the format contract but
+zero entries use them). 44 unique w×h sizes; PNG output 102-1178 bytes each, 31,288 bytes total.
+`git ls-files web/assets` = 90 tracked files (89 PNGs + `resources.json`).
+
