@@ -563,3 +563,494 @@ course-signs 57-63, tall-pole 64, bench 65-67 (3), yeti 68-81 (14), snow-patch 8
 zero entries use them). 44 unique w×h sizes; PNG output 102-1178 bytes each, 31,288 bytes total.
 `git ls-files web/assets` = 90 tracked files (89 PNGs + `resources.json`).
 
+
+## Data model
+
+Authoritative, disassembly-verified data model (objdump -d on `original/ski32.exe`).
+Where the Ghidra C and the disassembly disagree, the disassembly wins — see
+*Ghidra offset mis-render* below. Positions are in **1/16-m** units (1 m = 16 units);
+`Dist:` on the status panel is `y/16` meters.
+
+### Ghidra offset mis-render (read this first)
+
+Ghidra's decompiler shows two overlapping byte-views of the entity struct. In the
+"byte view" the player position fields are rendered as `+0x10/+0x11/+0x12`, but the
+disassembly proves the real offsets are `+0x40/+0x44/+0x48`:
+
+- `game_entity_step` 0x402be0: `mov bx,[esi+0x40]; mov bp,[esi+0x42]; mov di,[esi+0x44];
+  add bx,[esi+0x46]; add bp,[esi+0x48]; add di,[esi+0x4a]`
+- `game_entity_set_pos` 0x402390 tail: `mov [esi+0x42],cx (y); mov [esi+0x40],bp (x);
+  mov [esi+0x44],dx (mode)`
+- `game_entity_set_col` 0x402180: `cmp di,[esi+0x10] ... mov [esi+0x10],di; mov [esi+0x14],c5f8+col*0x10`
+- `game_entity_rect` 0x401410: `cmp WORD [esi+0x10],0; ax=[esi+0x10]; ax<<4; +c5f8 == [esi+0x14]`
+- WM_CHAR handler 0x406780: `mov ax,[ecx+0x44]; mov dx,[ecx+0x42]; mov dx,[ecx+0x40]`
+
+So wherever decompiled C says `*(short*)(x + 0x10/+0x11/+0x12)` on a **player** position
+access, the true field is `+0x40 (x) / +0x44 (mode) / +0x48 (speed)`. The genuine `+0x10`
+field (sprite column, u16) is separate and real (proven by the 0x402180/0x401410
+disassembly above). The older "inferred" entity table above this section is superseded.
+
+### Entity struct (80B = 20 dwords)
+
+Pool: `c648` = LocalAlloc(8000) (zero-filled), 100 slots × 80B; freelist `c744` (100
+nodes chained through `+0x00`, built by `game_freelist_init` 0x404a00); active list head
+`c618`. Allocation 0x402280: `rep movsd` of 16 dwords from the zero template `c030`,
+clears `+0x0c`, head-insert (param 0) or splice (param 1).
+
+| off | field | evidence |
+|---|---|---|
+| +0x00 | next (active list) | reaper 0x401390 `*puVar2 = *puVar1`; allocator |
+| +0x04 | group partner (bidirectional dword; 0 = alone) | `game_group_split` 0x402220; die 0x401350 clears partner's back-link |
+| +0x08 | group chain next | draw 0x401540 walks to group head |
+| +0x0c | gate descriptor ptr (36B rec; 0 = not gate-spawned) | spawn 0x404130 sets `entity[3]=desc`; reaper: `if (e[3]) e[3]->entity = 0` |
+| +0x10 | sprite column (u16, 1..0x59, must be ≠ 0) | set_col 0x4021c6 `mov [esi+0x10],di`; rect 0x40143c asserts nonzero |
+| +0x12 | (unused padding — never written; decompiled `+0x12` on player = real `+0x48`) | see mis-render |
+| +0x14 | sprite column table entry ptr (`c5f8 + col*0x10`) | set_col 0x4021da `mov [esi+0x14],eax`; rect 0x401466 asserts consistency |
+| +0x16 | (unused padding) | — |
+| +0x18 | type (u16: 0..0x11; 0x12 = no-spawn sentinel, not a type) | alloc: `puVar1[6] = type`; activate 0x4028e0 `switch(param_1[6])`; 0x402912 `mov eax,[esi+0x18]` |
+| +0x1c | frame (u16, 0..0x3f asserted by set_frame 0x402120) | anim_update 0x403430 asserts `*(int*)(+0x1c) == row[6]` |
+| +0x20..+0x27 | world/camera-space rect {x1,y1,x2,y2} (4×s16) | rect_calc 0x4014b0 writes 4 shorts; world_shift 0x402470: `e[8]/e[9]/e[10]/e[0xb] -= dx/dy` = +0x20/+0x24/+0x28/+0x2c |
+| +0x28..+0x3f | (rect part 2 / screen-space; copied by template, used by draw 0x401540) | — |
+| +0x40 | x (world, 1/16 m) | step disasm; set_pos |
+| +0x42 | y (world, 1/16 m; distance) | step disasm; `Dist:` = y/16 |
+| +0x44 | mode (u16: 0 = upright, >0 = crouched depth) | set_pos writes it; step `di = +0x44 + +0x4a` |
+| +0x46 | steer velocity (s16, clamped ∓8) | step `add bx,[esi+0x46]`; input writes ±8 |
+| +0x48 | speed (s16, y-velocity per tick; 0..24) | step `add bp,[esi+0x48]`; anim_update 0x403430 computes it; `Speed:` = `+0x48*1000/(c5f4<<4)` |
+| +0x4a | transition counter (s16; ramps mode up/down) | step: `if (di>0) { +0x4a--; set_pos(mode=di) } else { +0x4a=0; set_pos(mode=0) }` |
+| +0x4c | flags (u32) — see below | — |
+
+### Entity flags (+0x4c, u32)
+
+| bit | meaning | evidence |
+|---|---|---|
+| 0 (0x1) | group-duplicate mark (draw-order dedup) | draw 0x401540 sets/tests; set_pos clears (0x40244e `and ecx,0xfffffffb`); split: orig `&=~1`, copy `\|= 2` |
+| 1 (0x2) | split copy / duplicate to be culled after a member draws | split 0x402220 sets on clone; render pass 4 (0x401060:44,109) `if (flags&2) game_entity_die` |
+| 2 (0x4) | world rect cached (valid) | rect_calc asserts clear before (0x401427 `test [esi+0x4c],4`), sets after (0x401498 `or al,4`); 0x406060/0x402470 clear on camera change |
+| 3 (0x8) | dead | die 0x401350 `flags \|= 8`; reaper 0x401390 reaps `flags&8`, clears `c72c`/`c64c` if it was the player |
+| 4 (0x10) | in group | merge 0x401a60 |
+| 5 (0x20) | pos/col changed this tick (rect pair needs refresh) | set_pos always sets (0x402449 `or al,8; shl 2` → 0x20); set_col 0x4021f7 `or edx,0x20`; physics pass 1 clears at tick start (0x401e50 `&= 0xffffffdf`); collision pair-test only when either has 0x20 |
+| 6 (0x40) | special column (col ∈ {0x1b=27 snowdrift band, 0x52=82 snow patch}) | set_col 0x4021f7: `bit6 = util_frame_special(col)` (0x402310: `v==0x1b \|\| v==0x52`) |
+
+### Sprite column table (`c5f8`, 90 × 16B = 0x5a0 bytes)
+
+Built by `game_sprites_load` 0x405ab0 from the 89 RT_BITMAPs (ids 1..0x59; index 0
+unused). Entry layout (disasm-verified):
+
+| +0x00 | +0x04 | +0x08 | +0x0a | +0x0c | +0x0e |
+|---|---|---|---|---|---|
+| image DC | mask DC | yOff (u16) | width (u16) | height (u16) | area = w·h (u16) |
+
+`game_entity_rect_calc` 0x4014b0 reads `entry+0x0a` (w) and `entry+0x0c` (h);
+`game_entity_set_col` reads `entry+0x0e` (area) for the on-screen area budget `c6fc`.
+
+### Gate descriptor (36B = 9 dwords)
+
+Pool `c758` = LocalAlloc(0x2400) (256 slots); count `c702` (max 0x100 asserted by
+`game_gate_list_add` 0x405120); list head `c720`. Array triple `{head, tail(+0x24
+stride), cursor}` at `c630` (SS), `c5e0` (GS), `c658` (FS), `c738` (tall poles);
+`c720` is the **moving** list (benches + yetis), stepped by `game_gate_update`
+0x4040a0 instead of `game_gate_scan` 0x4046e0.
+
+| off | field | evidence |
+|---|---|---|
+| +0x00 | entity ptr (NULL until spawned) | gate_step 0x40421f `edi=[esi]`; list_add `*desc = 0` |
+| +0x04 | col entry ptr = `c5f8 + low16(+0x08)*0x10` | list_add 0x405120: `desc[1] = (ushort)desc[2]*0x10 + c5f8` |
+| +0x06 | col (u16) | from template slot (frame value of signpost gates) |
+| +0x0c | type (u16: 0xc = SS/GS signpost, 0xd = pine/pole, 0x11 = start/finish banner, 4 = bench, 5-8 = yeti) | gate_step 0x4041e7/0x4041f2: `eax=[esi+0xc]; cmp 4 / cmp 5..8` |
+| +0x10 | frame (u16) | gate_step `set_frame(entity, desc[4])` = +0x10 |
+| +0x14 | x | gate_step 0x4041d7-0x4041df: `[esi+0x14] += [esi+0x1a]` |
+| +0x16 | y | `[esi+0x16] += [esi+0x1c]` |
+| +0x18 | z (mode passed to set_pos; benches carry 32) | `[esi+0x18] += [esi+0x1e]` |
+| +0x1a | vx (steer) | 0x4041d7 |
+| +0x1c | vy | 0x4041db/0x4041ea |
+| +0x1e | fdelta (z velocity; yeti chase decay) | 0x4041e3; cruise: `dec [esi+0x1e]` while chasing |
+| +0x20 | timestamp (u32; wake-anim start, set to `c698` on yeti-kill) | cruise `edi=[esi+0x20]; eax = c698 - edi` |
+
+`game_gate_set_col` 0x403130: `desc->col = col; desc->+0x04 = c5f8+col*0x10; if
+spawned: game_entity_set_col(entity, col)`. Style gate cursors: `c94c` = first SS
+signpost descriptor, `c950` = first GS signpost descriptor (set in level_init).
+
+### Level layout (`game_level_init` 0x404b50; all y in 1/16 m)
+
+Static arrays (spawned by `game_gate_scan` when they enter the extended view):
+
+(Values in 1/16-m position units; ÷16 = meters. Disasm-verified, 0x404b50-0x405100.)
+
+- **SS course (c630):** banner type 0x11 frame 61 "Slalom" at (x ≥ -0x140 view-clamped,
+  y ≤ 0x208 = 32.5 m view-clamped); "Start" signs type 0x11 frames 57/58 at (-576,
+  0x280) / (-320, 0x280) [40 m]; **signpost gates type 0xc**, alternating
+  x = -240 (col 23, frame 0x17) / x = -144 (col 24, frame 0x18), y = 0x3c0 .. step
+  0x140 while < 0x21c0 (**24 gates, 60..476 m, step 20 m**); "Finish" signs type 0x11
+  frames 59/60 at (-576, 0x21c0) / (-320, 0x21c0) [540 m]. Gate cursor `c94c` = first
+  signpost.
+- **GS course (c5e0):** banner type 0x11 frame 62 "Tree Slalom" (x ≤ 0x140 clamped,
+  y ≤ 0x208); "Start" signs frames 57/58 at (0x140=320, 0x280) / (0x200=512, 0x280)
+  [40 m]; **signpost gates type 0xc**, alternating x = 144 (col 23, frame 0x17) /
+  x = 432 (col 24, frame 0x18), y = 0x410 .. step 0x190 while < 0x4100
+  (**39 gates, 65..1015 m, step 25 m**). Gate cursor `c950` = first signpost.
+  **No pine gates exist in the GS course** — the loop computes a type 0xd pine
+  (col = rand(8), x = 400 + rand(0x20)) into the stack template but never calls
+  list_add for it, and the following `rand(400)` result is discarded: 3 rand() calls
+  per gate × 39 gates = **117 RNG consumption per game_start** (must be reproduced
+  for exact seed-freeze; see M1 RNG). "Finish" signs frames 59/60 at (320, 0x4100) /
+  (512, 0x4100) [1040 m].
+- **FS course (c658):** banner type 0x11 frame 63 "Free-style" at (0, view-clamped
+  ≤ 0x208); "Start" signs frames 57/58 at (-160, 0x280) / (160, 0x280) [40 m];
+  "Finish" signs frames 59/60 at (-160, 0x4100) / (160, 0x4100) [1040 m].
+- **Tall poles (c738):** type 0xd frame/col 64 at x = -128, y = -0x400 .. 0x5c00 step
+  0x800 (**13 poles, -64..1472 m, step 128 m**).
+
+Moving list (c720, `game_gate_update` 0x4040a0 — moves every tick):
+
+- **Benches type 4**, z = 32 (24 total): at y = -0x400 (-64 m) one: frame 41
+  (x = -144, vy = +2); at every y = 0 .. 0x5800 step 0x800 (64..1344 m, 11 pairs):
+  frame 39 (x = -112, vy = -2) + frame 41 (x = -144, vy = +2); at y = 0x5c00 (1472 m)
+  one: frame 39 (x = -112, vy = -2). Benches drift vertically (gate_step); 0x404290
+  re-wraps them past y < -0x3ff / y > 0x5bff, and a top-band frame-39 bench spawns a
+  snowboarder (type 3, frame 0x21, at the bench's x/y) when rand(1000)==0, then
+  switches to frame 0x28.
+- **Yetis (types 5-8), frame 42 (sleep):** type 7 at (49476 ≈ 3092 m, 0); type 8 at
+  (16060 ≈ 1004 m, 0); type 5 at (0, -200 = -12.5 m); type 6 at (0, 32060 ≈ 2004 m).
+  Triggers: see *Monster*.
+
+### Windows and status panel (child-window conclusion)
+
+**The status panel is a real child window, not a direct draw.**
+
+- `game_create_windows` 0x4052d0:
+  - main: `CreateWindowExA(0, "SkiMain", str(1)="SkiFree", 0x2cf0000
+    (WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN), X=(HORZRES-min)/2, 0, min(HORZRES,VERTRES),
+    VERTRES, NULL)` → `c6c8`.
+  - status: `CreateWindowExA(0, "SkiStatus", &c788 (empty 64B buffer), 0x40000000
+    (WS_CHILD), 0,0,0,0, parent=c6c8)` → `c624`; `ShowWindow(c624, SW_SHOW);
+    UpdateWindow(c624)`.
+- Classes (both registered in 0x4052d0, both `hbrBackground = c69c =
+  GetStockObject(0) = WHITE_BRUSH`): `SkiMain` style 0x2023
+  (CS_VREDRAW|CS_HREDRAW|CS_OWNDC|CS_BYTEALIGNCLIENT), WndProc `wproc_main`
+  0x405800, icon "iconSki"; `SkiStatus` WndProc `wproc_status` 0x4068d0. The
+  `button` string (a1a4) is dead .rdata (never registered).
+- `wproc_status` 0x4068d0: WM_CREATE → 0x406a70 (`c6cc = GetDC(hwnd)`,
+  `c664 = SelectObject(c6cc, GetStockObject(10) = OEM_FIXED_FONT)` — disasm
+  0x406a95 `push 0xa`; `c664` then holds the previously-selected HGDIOBJ;
+  GetTextMetricsA → `c668` tmHeight, measures RT strings 3-10 → panel widths
+  `c66c` (left+right) / `c66a`); WM_SIZE → `GetClientRect → c778`;
+  WM_PAINT → 0x406970 (`BeginPaint`; `FrameRect(hdc, &c778, GetStockObject(4)
+  = BLACK_BRUSH)`; TextOut 4 labels RT 3-6 at x=2 advancing y by `c668` each via
+  0x401e20; then `draw_status_values(paint hdc)`; EndPaint).
+- Reposition: `wproc_status_reposition` 0x406890 — `nWidth = (short)c66c + 4;
+  MoveWindow(c624, c6b8 - nWidth, c6b4, nWidth, (short)c66a + 4, 1)` — called from
+  `wproc_main`'s WM_SIZE (0x405800:34) when `c624 != 0`. Child coords: right edge at
+  client width, top at client height (panel sits at the bottom-right, height
+  tmHeight+4).
+- `wproc_main_destroy` 0x405ec0: ReleaseDC(c63c), game_pause, delete GDI objects
+  (c620/c644/c6d4/c75c/c614 selected on DCs c710/c730/c6a4/c6ec/c5ec), DeleteDC ×5.
+- NCCALCSIZE quirk (wproc_main): `rgrc[0].right = 300; rgrc[0].bottom = 320` (absolute
+  screen coords, not deltas) → client size = 300×320 only when the window's top-left
+  is at (0,0); otherwise smaller (M0 observed 124×309 at window pos (176,11)).
+
+### Status panel value sources (`draw_status_values` 0x401b80)
+
+Called from `game_tick` when `c698 - c5dc > 0x147` (327 ms; `c5dc` = last update,
+stamped at the end of 0x401b80) and directly from `game_player_face` 0x402e80 at style
+run end. Values (right column, x = `c66c._2_2_ + 2`, y advances tmHeight per line):
+
+| line | source | formula |
+|---|---|---|
+| Time: | `util_fmt_time(c944)` (RT 11 `%2u:%2.2u:%2.2u.%2.2u`) | `c944` = **style-run elapsed ms**, written only by `game_style_ss` 0x402c60 / `game_style_gs` 0x403250 while `c95c`/`c958` is active (`c944 = c698 - c948`); zeroed by `game_reset` 0x404970 |
+| Dist: | `wsprintf(RT12 "%5.2dm", sVar1/16)` | `sVar1` = player `+0x42`; if SS run active (c95c) → `0x21c0 - y`; if GS (c958) or FS (c954) run active → `0x4100 - y`; else `y` (total distance); signed round-div by 16 |
+| Speed: | `wsprintf(RT13 "%5.2dm/s", v)` | `v = (+0x48 * 1000) / (c5f4 << 4)`; 0 if `c5f4 == 0` |
+| Style: | `wsprintf(RT14 "%7ld", c6a8)` | style score accumulator |
+
+**Why `Time:` stays `0:00:00.00` (under Wine and on Windows):** `Time:` is **not**
+wall-clock time — it is the SS/GS style-run timer (`c944`). It only starts when the
+player crosses y = 0x280 (640 = 40 m) moving +y with the interpolated crossing-point
+x (`util_lerp` 0x402e30) inside the SS lane x ∈ (-577, -319) or the GS lane
+x ∈ (319, 513) (`game_style_ss` 0x402c60 / `game_style_gs` 0x403250). Outside a style
+lane `c944` keeps its `game_reset` zero, so the panel shows the default
+`00:00:00.00` (RT string 7). The M0 Wine run simply never entered a style lane.
+
+### Player mode model (`+0x44` / `+0x4a` / frames)
+
+- `mode` (0x44): 0 = upright; >0 = crouched depth. `transition` (0x4a): ramp counter.
+  `game_entity_step` 0x402be0 per tick: `mode_new = +0x44 + +0x4a`; if `mode_new > 0`:
+  `+0x4a--; set_pos(mode = mode_new)` else `+0x4a = 0; set_pos(mode = 0)`. So crouch
+  (Alt: `+0x4a = 2`, frame 0xd) ramps mode 2→1→0 over 3 ticks; mouse-button crouch sets
+  `+0x4a = 4`.
+- Facing frames (a308 table @ 0x40a308, 22 rows × 8×u16:
+  `{accel-flag, max-speed, steer-decay, steer-window, dir-sign (0xFFFF=left,
+  1=right, 0=auto), 0, frame-idx, 0}`): 0 = downhill (max 16, no window), 1-3 = left
+  turn (max 12/6/0, window 1/4/8, left sign), 4-6 = right turn (same, right sign),
+  7/8 = left/right lean (max 0, window 8), 9/10 = jump (max 0), 11/12 = **crash
+  (accel flag 0, max 0 — frozen, terminal)**, 13-21 = crouch (max
+  24/22/22/20/24/20/20/22/22).
+- `game_anim_update` 0x403430 (per tick, player only via activate): speed `+0x48`
+  accelerates +1/tick (only when accel flag = 1) toward the row max, decays -2/tick;
+  steer is clamped to a speed-proportional window `(window × speed)/2` with ±2/tick
+  decay outside it.
+- **Crash (non-lethal):** collision sets frame 0xb (col 12 "OUCH!") when upright,
+  frame 0x11 (col 18) when crouched; a308 next = 0 (frozen) and `wproc_main_input`
+  skips all controls for frames 0xb/0x11 — the crash is terminal; only Enter/F1/F2
+  recover. **Death (lethal):** only yeti contact kills the player.
+- Jump: only from speed 0 (Ctrl on frames 3/7/0xc → frame 9; on 6/8 → frame 10),
+  sets speed = -4 (backward hop). Crouch slide: Alt (mode 0) → `+0x4a = 2`, frame 0xd,
+  speed -= 4 if > 4.
+
+### Monster (yeti) trigger, chase, end conditions (`game_gate_cruise` 0x404350)
+
+Per tick, per yeti descriptor (types 5-8 in c720). Two gates must pass for the
+trigger: a **self-gate** on the yeti's own position (0x404471-0x4044d8), then the
+**player threshold** (0x4044f2-0x404533):
+
+- **Self-gate (disasm 0x404471-0x4044d8):** type 5: yeti_y ≤ -2000; type 6:
+  yeti_y ≥ 32000; type 7: yeti_x ≤ -16000; type 8: yeti_x ≥ 16000. On failure the
+  yeti idles (velocity from a per-type sentinel: type 6 → 0, type 7 → -256,
+  type 8 → +16, type 5 → -28640, driving the idle frame family).
+- **Player threshold (player position, disasm 0x4044f2-0x404533):**
+  - type 6 (yeti at y=32060): **player y > 32000 = 2000 m** (the ~2000 m rule).
+  - type 8 (yeti at x=16060): player x > 16000 = 1000 m (to the right).
+  - type 5: player y < -2000; type 7: player x < -16000 — mirror regions, unreachable
+    in normal downhill play.
+- **On trigger (0x404539):** teleport the yeti one full view away from the player in
+  the direction of separation: if player_x - yeti_x > viewW → yeti_x = player_x -
+  viewW; if < -viewW → +viewW; same for y with viewH (viewW = `(short)c5f0`,
+  viewH = `(short)c6d8`); store velocity `vx = clamp(dx, ±16)`, **vy = 0**,
+  `fdelta = 1` (the velocity-mixing code at 0x4045d8-0x404613 is dead — its results
+  are overwritten at 0x40461d-0x404628); `snd_play(c6f0)` (wave 7 — silent, no WAVE
+  resource exists).
+- **Chase is one-shot:** the trigger re-arms only while the self-gate still holds.
+  After the first teleport the yeti sits at player_y ∓ viewH, which normally fails
+  the type-6 self-gate (yeti_y < 32000) → next tick it idles: velocity zeroed,
+  frame 42/43 (rand(10) == 0 → 43, fdelta 4), frozen at the view edge. The player
+  dies only if their path collides with the (now frozen) yeti. The `+0x18` chase-state
+  path (frame 46/47 toggle at 0x4046b8) is dead — nothing sets `+0x18` to 1.
+- **Wake-up animation** (after a kill, times vs `desc+0x20` = kill timestamp, jump
+  table 0x4046c4): 50 →(immediate)→ 51 →(> 499 ms)→ 52 →(> 700 ms)→ 53 →
+  (> 1000 ms)→ 54 →(immediate)→ 55 →(> 2999 ms)→ 42/43 (sleep).
+- **Kill** (`game_collide` 0x403a00, case 5-8, `param_2 == c72c`): `snd_play(c6e0)`;
+  group-split if flagged; **`game_entity_die(player)`**; yeti reset: desc frame = 0x32
+  (50, wake anim), steer = 0, vy = 0, entity speed = 0, desc+0x20 = c698.
+
+**End conditions (complete list):**
+
+1. **Player killed (yeti contact)** — only lethal path: reaper 0x401390 clears
+   `c72c` and `c64c`; the world keeps running; all input handlers no-op
+   (gated by `c72c`); Enter or F1 → `game_restart` 0x406500 (`game_reset` +
+   `game_start`); Esc minimizes; F2 toggles the title.
+2. **Player crash (any other collision)** — terminal frozen state (frame 11/17);
+   same recovery keys.
+3. **Style run completion** (not game end): SS at y > 0x21c0 (540 m) →
+   `score_show("SS", c944, is_time=1)`; GS at y > 0x4100 (1040 m) →
+   `score_show("GS", c944, is_time=1)`; FS at y > 0x4100 (1040 m) →
+   `score_show("FS", c6a8, 0)`.
+   Each pops the modal "High Scores" MessageBox (the game keeps ticking under the
+   modal loop — no pause call around it).
+4. There is **no finish line** — the course is infinite; only the yetis, crashes, or
+   the user end a run.
+
+### High-score INI (`entpack.ini`)
+
+`score_show` 0x402ec0, called with (key, value, is_time): key ∈ {"SS" (c0d8), "FS"
+(c0f4), "GS" (c0f8)}; times are negated before storage (`if (is_time) value =
+-value`).
+
+- **File:** `entpack.ini` (c084) in the CWD; **section** `[Ski]` (c080).
+- **Read:** `GetPrivateProfileStringA("Ski", key, "" (c788), buf, 0x100, "entpack.ini")`.
+- **Format:** space-separated signed longs, one trailing space per entry (`"%ld "`
+  wsprintf, c0ec) — e.g. `SS= -12345  -13000  ...`; max **10** entries, kept in
+  **descending** order (negated times → index 0 = fastest).
+- **Parse:** skip spaces, read until space/NUL, `_atoi` (0x406cf8), ≤10 values.
+- **Insert:** first index where `existing < new` (descending); if none (would be 10th
+  of 10) → did not qualify; else shift right, drop last, insert.
+- **Write:** `WritePrivateProfileStringA("Ski", key, buf, "entpack.ini")`.
+- **Dialog:** MessageBoxA(owner = c6c8, body, "High Scores" (RT 15), 0); body =
+  entries joined by `\n` (0x0a); times formatted with `util_fmt_time(-value)`, FS as
+  `"%9ld"` (c0e4); the new entry gets RT 16 `" <-- that's you!"`; non-qualifying runs
+  append `"\n\n"` (c0dc) + the new time + RT 17 `" <-- try again!"`.
+
+### Input: exact key map and mechanism (Task 14 contract)
+
+**Mechanism: 100% message-consumed. There is NO key-state global and NO
+`GetKeyState`/`GetAsyncKeyState`/`ToAscii`/`MapVirtualKey` anywhere in the binary
+(grep of all 168 decompiled functions + import table = zero hits).** Every key event
+is handled exactly once, at message time, by the WndProc; nothing is polled between
+ticks. For Task 14 injection, synthesize WM messages (or call the handlers directly):
+`wproc_main` 0x405800 dispatches, gated by `c67c` (game active).
+
+WM_KEYDOWN (0x406170) — `wParam` = VK code:
+
+| VK | key | action |
+|---|---|---|
+| 0x0D | Enter | player present → ignored; no player → falls into F1 = `game_restart` |
+| 0x71 | F1 | `game_restart` (0x406500) |
+| 0x1B | Esc | `ShowWindow(c6c8, SW_MINIMIZE=6)` |
+| 0x72 | F2 | `game_pause_toggle` (0x405760) |
+| 0x21 | Up | if mode == 0 → frame 6 |
+| 0x22 | Right | if mode == 0 → frame 4 |
+| 0x23 | Left | if mode == 0 → frame 1 |
+| 0x24 | Down | if mode == 0 → frame 3 |
+| 0x25 | Space | left action: `a = a258[frame]`; if a == 7 → steer = clamp(steer-8, -8); else frame = a (facing rotate 0→1→2→3) |
+| 0x27 | RShift | right action: `a = a25c[frame]`; if a == 8 → steer = clamp(steer+8, +8); else frame = a (facing rotate 0→4→5→6) |
+| 0x26 | Ctrl | frame state machine: 3/7/0xc → 9 (only if speed == 0, then speed = -4); 6/8 → 10 (same); 0xd→0x12; 0xe→0x14; 0xf→0x15; 0x12→0x13; 0x13→0xd |
+| 0x28 | Shift | if mode == 0 → frame 0; else 0xd→0x12; 0x12→0x13; 0x13→0xd; 0x14→0xe; 0x15→0xf |
+| 0x2D | Alt | if mode == 0: `+0x4a = 2`, frame 0xd, speed -= 4 if > 4 (crouch) |
+
+The lowercase-ASCII cases in the same switch (0x41-0x79 range: `I C A G D H F B `)
+are **dead** — `wParam` of WM_KEYDOWN is a VK (letters are 0x41-0x5A), so they never
+match. After any action: if the frame changed, `set_frame` + `if (c610) { render;
+c610 = 0; }`.
+
+WM_CHAR (0x406780) — debug keys:
+
+| char | action |
+|---|---|
+| 'X' (0x58) | set_pos(player, x-2, y, mode) |
+| 'Y' (0x59) | set_pos(player, x, y-2, mode) |
+| 'x' (0x78) | set_pos(player, x+2, y, mode) |
+| 'y' (0x79) | set_pos(player, x, y+2, mode) |
+| 'f' (0x66) | `c670 = !c670` (double-step / turbo toggle — physics takes 2 steps/tick) |
+| 'r' (0x72) | `game_render` |
+| 't' (0x74) | `game_tick` (manual tick, independent of the timer) |
+
+Mouse (all gated by `c67c`):
+
+- WM_MOUSEMOVE (0x406550): dx = x - center, dy = y - center; upright →
+  `util_facing_delta` 0x4065e0; crouched → `util_facing_crouch` 0x406670 → set frame.
+- WM_LBUTTONDOWN / WM_RBUTTONDOWN (0x4066d0, same handler): no player →
+  `game_restart`; else frame 0xb (crashed) → nothing; mode 0 → `+0x4a = 4`, frame 0xd
+  (crouch); else crouch-frame rotate (0xd→0x12, 0xe→0x14, 0xf→0x15, 0x12→0x13,
+  0x13→0xd).
+- WM_MOUSEACTIVATE: returns MA_ACTIVATEANDEAT(2) when it would be MA_NOACTIVATE(1)
+  (quirk: triggered when mouse screen-x == 1).
+
+### Spawn zones and type pickers (`game_spawn` 0x4025c0)
+
+For each 0x3c (60 unit = 3.75 m) of camera travel, `game_physics` 0x401e50 (tail,
+disasm order) calls `game_spawn` for the crossed band edge, cursors `c5d8` (Y) /
+`c714` (X) stepped by ±0x3c: cursor Y > 0 → dir 3 (bottom band, y = H + 0x3c),
+cursor Y < -0x3c → dir 2 (top band, y = -0x3c), cursor X > 0 → dir 1 (right band,
+x = W + 0x3c), cursor X < -0x3c → dir 0 (left band, x = -0x3c). Position:
+`game_spawn_pos` 0x4024f0 (player-relative base + edge offset +
+`rand(c6d8)`/`rand(c5f0)` across the band length). Zone of the **spawn position** selects the
+picker; the area budget `c6fc` (total on-screen sprite area) gates each picker:
+
+| zone (spawn pos) | picker | rule |
+|---|---|---|
+| SS lane: x ∈ [-576, -320] and y ∈ [640, 8640] ([40, 540] m) | `game_spawn_pick_speed` 0x402770 | deterministic: `c6fc <= c748/64` → type 11 (0xb), else none |
+| GS lane: x ∈ [320, 512] and y ∈ [640, 16640] ([40, 1040] m) | `game_spawn_pick_narrow` 0x4027a0 | `c6fc > c748/16` → none; else r = rand(64): r == 0 → type 2 (dog), else type 0xf (drift) |
+| FS lane: x ∈ [-160, 160] and y ∈ [640, 16640] ([40, 1040] m) | `game_spawn_pick_mid` 0x4027e0 | `c6fc > c748/32` → none; else r = rand(100): <2 → 10, <20 → 0xd, <50 → 0xf, <60 → 0xb, <80 → 0x10 (banner), else none |
+| everywhere else (off-course) | `game_spawn_pick_wide` 0x4026f0 | `c6fc > c748/32` → none; else r = rand(1000): <50 → 10 (pine), <500 → 0xd (pine13), <700 → 0xf (drift), <750 → 0xb, <950 → 0xe (rock), <970 → 0x10 (banner), <990 → 2 (dog), else 1 (AI skier) |
+
+Type 0xb (11) and 0xa (10) are pine/green-tree variants (spawn frames a22c:
+type→frame [6,22,27,31,39,42,42,42,42,56,60]); types ≥ 0xb get their column from
+`game_sprite_frame` 0x402850 (0xd → rand(8) → cols 49/50/51; 0xe → rand(4) → 45/46;
+0xf → rand(3) → 47/48; 0x10 → col 52; 0xb → col 27; 0xc and ≥ 0x11 → assert).
+Finally, once per tick: `if (rand_range(0x29a) == 0)` (1/666) → spawn a snowboarder
+(type 3, frame 0x1f) via 0x402350(e, 2).
+
+### View / camera globals
+
+- `c704` = view center X (world units), `c5fc` = view center Y — set by
+  `game_set_center` 0x406060 on WM_SIZE: `c704 = (c6b0 + c6b8)/2`,
+  `c5fc = (c6b4 + c6bc)/3` (disasm 0x405fb4-0x405fe9: `imul 0x55555556` high-word
+  divide = /3, not the /4 the decompiler rendered). `c6b0..c6bc` are the four spawn-
+  band edge vars; `GetClientRect(&c6b0)` at WM_SIZE clobbers c6b0/c6b4 (the rect
+  overlays them) while c6b8/c6bc are adjacent stale globals (0 at startup → center =
+  (0, W/3)).
+- Camera = player position: `c640` low16 = camera X, `c5f0` high16 = camera Y —
+  updated by `game_world_shift` 0x402470 on every player `set_pos` (all non-player
+  entities' rects shift by the delta; the player itself is skipped). `c5f0` low16 =
+  spawn band width (from WM_SIZE, potentially stale).
+- Extended view (spawn/cull bounds): `c680 = c6b0-0x78`, `c684 = c6b4-0x78`,
+  `c688 = c6b8+0x78`, `c68c = c6bc+0x78` (±120 units); area `c748 = (H+240)(W+240)`.
+- Spawn cursors: `c5d8` (Y), `c714` (X), step 0x3c; `c6fc` = on-screen area budget.
+- `c610` = render-valid flag (set by game_tick after a render; input handlers re-
+  render once when set, then clear it).
+
+## M1 answers
+
+### 1. RNG — algorithm, seed, call order
+
+**The RNG is a custom 32-bit LCG in the game code — NOT the CRT rand** (the function
+map's "CRT rand" classification of 0x406cda is wrong; the constants are the classic
+Borland/Turbo-C rand pair and nothing in the import table is used):
+
+- **Algorithm** (`FUN_00406cda` 0x406cda, disasm-verified):
+  `c16c = c16c * 0x343fd + 0x269ec3; return (c16c >> 16) & 0x7fff;`
+  → 15-bit output, range 0..32767. Entire RNG state = the single u32 `c16c`.
+- **Seed setter** (`FUN_00406cd0` 0x406cd0): `c16c = seed;`
+- **Seed site** (`game_reset` 0x404970, first two lines):
+  `c698 = GetTickCount(); FUN_00406cd0(c698);` — i.e. **seed = GetTickCount() at
+  every reset** (startup via WinMain and every `game_restart`). For Task 8 (seed
+  freeze): overwrite `c16c` (or the `mov [c16c], seed` at 0x404970's call) — the LCG
+  then produces a fully deterministic stream.
+- **Wrapper** (`util_rand_range` 0x4020b0): `r = rand(); return r % n;` (low16 of the
+  returned dword; the high16 holds r/n and is unused by callers).
+
+**Per-tick rand() call order** (fixed skeleton; exact count depends on live entities):
+
+1. `game_physics` pass 1 — per entity in active-list order, `game_entity_activate`
+   0x4028e0 → AI anim functions (only when their frame condition hits):
+   type 1: rand(12) then rand(3); type 2 (dog): rand(3)/rand(0x20)/rand(100) by frame;
+   type 3 (snowboarder): rand(10); type 10 (pine): rand(100), rand(2), rand(10).
+2. Gate stepping — `game_gate_scan` ×4 + `game_gate_update` (moving list) → bench
+   0x404290: rand(1000) (only when a bench exits and a snowboarder may spawn);
+   yeti cruise 0x404350: rand(10) (only in the idle, non-moving branch).
+3. Collision pass — no rand.
+4. Spawn bands — per 60 units crossed: picker rand (rand(1000) wide / rand(100) mid /
+   rand(64) narrow / none for speed) + `game_spawn_pos` rand(c6d8)/rand(c5f0) +
+   `game_sprite_frame` rand(8)/rand(4)/rand(3) for types 0xd/0xe/0xf.
+5. Snowboarder roll — `rand_range(0x29a)` once per tick (1/666).
+
+`game_render` and the status redraw perform no rand calls.
+
+**Non-tick consumption (once per `game_start`):** `game_level_init` 0x404b50 runs in
+the GS-gate loop a `game_sprite_frame(0xd)` (rand(8)) + `rand(0x20)` for a pine gate
+that is never added to the list, plus a `rand(400)` whose result is discarded — 3
+rand() calls × 39 gates = **117 calls per game_start**, immediately after the
+GetTickCount seed. A seed-freeze reimplementation MUST consume these to stay in sync
+with the original per-tick stream.
+
+### 2. Timing — timer, tick site, input structure
+
+- **Timer:** `SetTimer(c6c8, 0x29a, c678 & 0xffff, c940)` in `game_resume` 0x404ad0 —
+  **timer ID 0x29a (666), period `c678` = 0x28 = 40 ms** (set in `game_reset`
+  0x404970), callback `c940` → `game_tick_cb` 0x4047c0: `if (c67c) game_tick();
+  return 1;`. `game_pause` 0x4057c0: `KillTimer(c6c8, 0x29a); c600 = now; c6d0 = 0`.
+- **Tick site:** `game_tick` 0x401000:
+  `c5f4 = now - c698 (delta); c708 = c698; c698 = now (GetTickCount);
+  game_physics (0x401e50); game_render (0x401060); c610 = 1; if (now - c5dc > 0x147)
+  draw_status_values(c6cc);`
+- **Fixed-step, not dt-scaled:** movement is one (or two, when `c670` debug toggle)
+  step per timer fire regardless of `c5f4`; the real delta `c5f4` is used only for
+  (a) the Speed display `+0x48*1000/(c5f4<<4)`, (b) style-run timing via
+  `util_lerp` on `c698`/`c708`, (c) the 327 ms status throttle. Physics does not
+  scale with the delta — a slow system simply plays slower.
+- **Input structure: message-consumed, no key-state global** — see Data model
+  *Input*. All control is applied synchronously inside WndProc handlers (WM_KEYDOWN /
+  WM_CHAR / WM_MOUSEMOVE / WM_LBUTTONDOWN / WM_RBUTTONDOWN), gated by `c67c`. No
+  polling APIs exist in the binary. A WASM port must feed equivalent events; there is
+  no GetKeyState-style state to snapshot.
+
+### 3. Sound — sndPlaySoundA sites, WAVE resources, flags, default state
+
+- **Sites:** `snd_init` 0x405620 sets `c790` = the `sndPlaySoundA` import; the only
+  call site is `snd_play` 0x402ba0:
+  `if (!c794) { if (!pair[1] && pair[0]) pair[1] = LockResource(pair[0]);
+  if (pair[1]) c790(pair[1], 5); }` — **flags = 5 = SND_ASYNC (1) | SND_MEMORY (4)**
+  (the pointer is the LockResource memory, not a resource name).
+- **Loads:** 9 `snd_load_wave` 0x405640 calls in `game_create_windows` 0x4052d0:
+  `FindResourceA(hInst, (LPCSTR)id, "WAVE"@c128)` → LoadResource → LockResource,
+  into 8-byte pairs. Order and slots: id 1→c6c0, 2→c768, 3→c5d0, 4→c718, 5→c750,
+  6→c628, **9→c6f0**, 7→c6e0, 8→c608 (id 9 loaded before 7/8).
+- **WAVE resource list: NONE.** The PE `.rsrc` root directory (file offset 0xd000)
+  contains exactly four type nodes: **2 = RT_BITMAP (89 entries), 3 = RT_ICON (6),
+  6 = RT_STRING (2 groups), 14 = RT_GROUP_ICON (2 named: ICONSKI, ICONSKI2)**.
+  There is **no RT_WAVE (type 15) node at all** — the earlier Resources section's
+  "9 RT_WAVE resources (ids 1-9) in `.rsrc`" is incorrect. Consequently all 9
+  FindResourceA calls return NULL at runtime, every pair is {NULL, 0}, and `snd_play`
+  is a no-op at every site (crash, yeti wake, gate pass, snowboarder, …).
+- **Default state:** sound is ON by default; `WinMain` 0x4047e0 sets `c794 = 1` only
+  when the command line matches `"nosound"` (lstrcmpiA). But because no WAVE
+  resources exist, **the game is silent in all configurations regardless of the
+  flag.** A WASM port can either omit audio entirely (faithful) or wire real samples
+  to the 9 pair slots (c6c0..c608) to realize the intended audio.
