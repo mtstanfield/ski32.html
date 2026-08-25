@@ -1,0 +1,136 @@
+{
+  "name": "s07_monster",
+  "ticks": 4000,
+  "events": [
+    {
+      "t": 100,
+      "key": "facing1",
+      "down": true
+    },
+    {
+      "t": 250,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 400,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 550,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 700,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 850,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 1000,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 1150,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 1300,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 1450,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 1600,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 1750,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 1900,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 2050,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 2200,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 2350,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 2500,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 2650,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 2800,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 2950,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 3100,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 3250,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 3400,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 3550,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 3700,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 3850,
+      "key": "right",
+      "down": true
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "s08_pause_scores",
+  "ticks": 1200,
+  "events": [
+    {
+      "t": 100,
+      "key": "facing1",
+      "down": true
+    },
+    {
+      "t": 300,
+      "key": "pause",
+      "down": true
+    },
+    {
+      "t": 500,
+      "key": "pause",
+      "down": true
+    },
+    {
+      "t": 900,
+      "key": "advance",
+      "down": true
+    },
+    {
+      "t": 1000,
+      "key": "advance",
+      "down": true
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "name": "s03_steering",
+  "ticks": 800,
+  "events": [
+    {
+      "t": 100,
+      "key": "facing1",
+      "down": true
+    },
+    {
+      "t": 200,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 300,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 400,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 500,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 600,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 700,
+      "key": "left",
+      "down": true
+    }
+  ]
+}

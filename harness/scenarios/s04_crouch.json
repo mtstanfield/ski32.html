@@ -1,0 +1,21 @@
+{
+  "name": "s04_crouch",
+  "ticks": 400,
+  "events": [
+    {
+      "t": 100,
+      "key": "facing1",
+      "down": true
+    },
+    {
+      "t": 200,
+      "key": "crouch",
+      "down": true
+    },
+    {
+      "t": 300,
+      "key": "crouch",
+      "down": false
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "name": "s06_longrun",
+  "ticks": 3000,
+  "events": [
+    {
+      "t": 200,
+      "key": "facing1",
+      "down": true
+    },
+    {
+      "t": 500,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 800,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 1100,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 1400,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 1700,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 2000,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 2300,
+      "key": "right",
+      "down": true
+    },
+    {
+      "t": 2600,
+      "key": "left",
+      "down": true
+    },
+    {
+      "t": 2900,
+      "key": "right",
+      "down": true
+    }
+  ]
+}

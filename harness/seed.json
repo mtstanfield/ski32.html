@@ -1,0 +1,28 @@
+{
+  "seed_constant": 1193046,
+  "original_patch": {
+    "addr": "0x404971",
+    "bytes_before": "FF 15 C0 A0 40 00",
+    "bytes_after": "B8 56 34 12 00 90",
+    "note": "game_reset 0x404970 seeds the RNG with the first two lines: c698 = GetTickCount(); FUN_00406cd0(c698)  [c16c = seed]. The GetTickCount call is the 6-byte IAT indirection call `call *0x40a0c0` at VA 0x404971 (file offset 0x4971; 0x404970 itself is the prologue `push esi`). Replacing it with `mov eax, 0x00123456` (B8 56 34 12 00) + NOP (90) makes the following `mov [c698],eax` store 0x00123456 and the seed setter store c16c = 0x00123456 on every game_reset (startup + every F2/Enter restart). GetTickCount remains called from game_tick 0x401000 and game_resume 0x404af5, but those only feed the fixed-step timing display (c5f4 delta), never the seed — physics steps once per 40 ms timer fire regardless of the delta, so the frozen c16c makes the whole rand() stream deterministic."
+  },
+  "rng": "msvc_rand",
+  "timing": { "settimer_ms": 40, "model": "fixed-step" },
+  "keys": {
+    "left": "VK_LEFT",
+    "right": "VK_RIGHT",
+    "up": "VK_UP",
+    "down": "VK_DOWN",
+    "crouch": "VK_NUMPAD0",
+    "jump": "VK_UP",
+    "restart": "VK_F2",
+    "pause": "VK_F3",
+    "advance": "VK_RETURN",
+    "facing": ["VK_NUMPAD1", "VK_NUMPAD3", "VK_NUMPAD7", "VK_NUMPAD9"],
+    "facing1": "VK_NUMPAD1",
+    "facing3": "VK_NUMPAD3",
+    "facing7": "VK_NUMPAD7",
+    "facing9": "VK_NUMPAD9"
+  },
+  "note": "Keymap verified 2026-08-25 against PE raw bytes + live runs (decompile/NOTES.md, M1 answers §4; supersedes all earlier keymap rows). The binary has NO WM_KEYUP handler — input is edge-triggered WM_KEYDOWN only, so scenario events with \"down\": false are no-ops for the injector (Task 14) and exist for JSON format round-tripping only. Numpad4/6/8/2 are alternates for Left/Right/Up/Down, Insert (0x2D) is an alternate crouch, Numpad5 and VK_SPACE and all other keys are no-ops, Esc minimizes (never used in scenarios). There is no menu state and no start key: the game starts at t=0 in the run state with the skier idle at speed 0, and the first frame-changing key press must land on a travel frame to start the descent (e.g. facing1 = Numpad1, or Right/Numpad6, Numpad3, Numpad9); Left/Numpad4 from idle only fires a transient ~200 ms lean (frame 3->7, max speed 0) that decays back to idle and never starts travel. There is no high-score entry UI (scores come from entpack.ini); Enter (advance) only restarts when no player exists (post-crash). F3 (pause) toggles: first press pauses, second press resumes. facing1/3/7/9 are the individual facing numpad keys (facing frames 1/4/3/6) so scenarios can reference each one explicitly."
+}

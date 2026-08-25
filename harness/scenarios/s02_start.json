@@ -1,0 +1,11 @@
+{
+  "name": "s02_start",
+  "ticks": 400,
+  "events": [
+    {
+      "t": 100,
+      "key": "facing1",
+      "down": true
+    }
+  ]
+}

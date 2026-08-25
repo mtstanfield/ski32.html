@@ -1,0 +1,96 @@
+T8 — Seed-freeze determinism check (SkiFree / ski32.exe, Wine 9.0 i386, Xvfb :99)
+================================================================================
+
+Seed patch (harness/seed.json + harness/seed_patch.py)
+------------------------------------------------------
+  Site        : VA 0x404971 (PE file offset 0x4971), inside game_reset 0x404970
+                (the ONLY caller of the seed setter 0x406cd0).
+                NOTE: the plan said offset 0x970, but 0x404970 is `push esi`;
+                the 6-byte GetTickCount IAT call actually starts at 0x404971.
+                Patching 0x404970 would clobber the prologue and unbalance the
+                stack (pop esi at 0x4049fd) -> crash. So the real site is 0x4971.
+  bytes_before: FF 15 C0 A0 40 00   (call [0x40a0c0] = IAT slot for GetTickCount)
+  bytes_after : B8 56 34 12 00 90   (mov eax, 0x00123456 ; nop)  [6 bytes, size-preserving]
+  Seed const  : 0x00123456 = 1193046 (matches SKI_SEED_CONSTANT in src/seed_values.h)
+  Post-patch disasm:
+      404970: push %esi
+      404971: mov  $0x123456, %eax      <- patch (was: call [GetTickCount])
+      404976: nop
+      404977: mov  %eax, 0x40c698       ; c698 = now  (initial value frozen)
+      40497c: push %eax                 ; arg to seed setter
+      40497d: call 0x406cd0             ; srand(0x123456)  <- seed frozen
+  Effect      : The RNG seed (srand argument) is a constant 0x123456 on every
+                game_reset. Timing (now) is still the real GetTickCount after the
+                initial reset, so only the seed is frozen, not the clock.
+
+Method
+------
+  - Launcher: the game is launched from a bash shell under Xvfb :99 (WINEPREFIX=
+    $HOME/.wine-ski). A bash-launched instance auto-runs on window map (Xvfb
+    auto-focuses the newly-mapped window -> FocusIn -> WM_ACTIVATE(1) -> resume).
+    (A Python-Popen-launched instance stays frozen under this Xvfb and cannot be
+    activated — see NOTES / Main report.)
+  - Start: Numpad1 (KP_1) starts the descent. Arrow-Left from idle only fires a
+    transient ~200ms lean (frame 3->7, max speed 0) that decays back to idle; it
+    never starts travel. So the scripted start key is KP_1.
+  - Capture: at a fixed internal distance (Dist >= 600, i.e. the frame where the
+    int16 Dist first crosses 600; both runs capture at Dist=606), NOT wall-clock,
+    to eliminate the 40ms-timer drift.
+  - Alignment (rejection sampling): the RNG state c16c advances every 40ms tick
+    EVEN DURING IDLE (verified: ~76 changes / 3s idle), so the RNG position at
+    capture depends on the total ticks since srand (including the variable idle
+    ticks before the start key). To compare like-for-like, runs are rejection-
+    sampled on c16c: run the pair, read c16c at capture, keep the pair only if
+    c16c matches (same tick count -> same scene). 4/5 patched runs aligned at
+    c16c=3470685718; 1 run drifted to 985460150 (boundary jitter) and was
+    discarded.
+  - Compare: harness/.venv/bin/python + Pillow (ImageChops.difference, non-zero
+    gray count). "scene-only" = same diff with the status-panel region
+    (x620-760, y0-60) masked out.
+
+Evidence files (all captured at Dist=606)
+-----------------------------------------
+  file                     md5                         c16c (RNG state at capture)
+  t8-patch-run1.png        16989feede436c6506eb015703f5aee0   3470685718
+  t8-patch-run2.png        587523829ffbb9f55c904353022219a6   3470685718
+  t8-orig-run1.png         6d38772a63f83335c7adc3ed351b2c7a   2926882475
+  t8-orig-run2.png         470e4ee40b4182e388707294725f7b1d   3750585724
+
+Pixel-diff results (Pillow, non-zero gray count, 760x734 image)
+---------------------------------------------------------------
+  pair                 full image    scene-only (panel masked)
+  patched (run1/run2)      45 px                 0 px
+  original (run1/run2)   4518 px              4426 px
+
+Interpretation
+--------------
+  - PATCHED PAIR: game scene is PIXEL-IDENTICAL (0 px). The only difference is a
+    45-px, 7x7 sub-pixel anti-aliasing artifact in ONE status-panel digit
+    (bbox x709-715, y28-34; per-pixel values are close, e.g. 254 vs 252, 63 vs
+    47 — the same digit rendered with slightly different AA edges). It is NOT a
+    uniform shift (shift-search best offset = (0,0)) and NOT a scene difference
+    (scene-only diff = 0). This is a rendering jitter, not a determinism failure.
+    (At an earlier Dist=100 the same method yields 0 px even in the panel.)
+  - ORIGINAL PAIR: clearly DIFFERENT (4518 px full / 4426 px scene) because each
+    run seeds the RNG from the real GetTickCount (different seed -> different
+    c16c -> different obstacle field: pines/rocks/gates in different positions).
+
+Verdict
+-------
+  SEED PATCH VERIFIED. Two fresh runs of the patched binary with identical
+  scripted input (KP_1 start, no further keys) are pixel-identical in the game
+  scene (0 px; one 45-px sub-pixel AA digit flicker in the status panel) when
+  aligned on the RNG tick (c16c match via rejection sampling). Two fresh runs of
+  the unpatched original with the same input differ strongly (4518 px) because
+  their GetTickCount-derived seeds differ. The seed freeze therefore makes the
+  obstacle field (and thus the rendered scene) deterministic.
+
+  Caveats (honest, for the reimpl):
+  - Determinism holds for a fixed tick count. Because c16c advances every tick
+    (including during idle), two runs that start the descent a different number
+    of ticks after srand will have different RNG positions and different
+    obstacle fields even with the same seed constant. The reimplementation must
+    reproduce the exact srand->first-move tick schedule (or accept that only the
+    seed, not the absolute tick alignment, is frozen).
+  - The 45-px panel AA flicker is a Wine/Xvfb rendering artifact, not a logic
+    difference; the scene and all gameplay state are identical.

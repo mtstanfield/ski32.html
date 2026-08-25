@@ -1,0 +1,221 @@
+{
+  "name": "s05_modes",
+  "ticks": 800,
+  "events": [
+    {
+      "t": 100,
+      "key": "facing1",
+      "down": true
+    },
+    {
+      "t": 200,
+      "key": "facing1",
+      "down": true
+    },
+    {
+      "t": 200,
+      "key": "facing3",
+      "down": true
+    },
+    {
+      "t": 200,
+      "key": "facing7",
+      "down": true
+    },
+    {
+      "t": 200,
+      "key": "facing9",
+      "down": true
+    },
+    {
+      "t": 200,
+      "key": "up",
+      "down": true
+    },
+    {
+      "t": 200,
+      "key": "down",
+      "down": true
+    },
+    {
+      "t": 200,
+      "key": "crouch",
+      "down": true
+    },
+    {
+      "t": 300,
+      "key": "facing1",
+      "down": true
+    },
+    {
+      "t": 300,
+      "key": "facing3",
+      "down": true
+    },
+    {
+      "t": 300,
+      "key": "facing7",
+      "down": true
+    },
+    {
+      "t": 300,
+      "key": "facing9",
+      "down": true
+    },
+    {
+      "t": 300,
+      "key": "up",
+      "down": true
+    },
+    {
+      "t": 300,
+      "key": "down",
+      "down": true
+    },
+    {
+      "t": 300,
+      "key": "crouch",
+      "down": true
+    },
+    {
+      "t": 400,
+      "key": "facing1",
+      "down": true
+    },
+    {
+      "t": 400,
+      "key": "facing3",
+      "down": true
+    },
+    {
+      "t": 400,
+      "key": "facing7",
+      "down": true
+    },
+    {
+      "t": 400,
+      "key": "facing9",
+      "down": true
+    },
+    {
+      "t": 400,
+      "key": "up",
+      "down": true
+    },
+    {
+      "t": 400,
+      "key": "down",
+      "down": true
+    },
+    {
+      "t": 400,
+      "key": "crouch",
+      "down": true
+    },
+    {
+      "t": 500,
+      "key": "facing1",
+      "down": true
+    },
+    {
+      "t": 500,
+      "key": "facing3",
+      "down": true
+    },
+    {
+      "t": 500,
+      "key": "facing7",
+      "down": true
+    },
+    {
+      "t": 500,
+      "key": "facing9",
+      "down": true
+    },
+    {
+      "t": 500,
+      "key": "up",
+      "down": true
+    },
+    {
+      "t": 500,
+      "key": "down",
+      "down": true
+    },
+    {
+      "t": 500,
+      "key": "crouch",
+      "down": true
+    },
+    {
+      "t": 600,
+      "key": "facing1",
+      "down": true
+    },
+    {
+      "t": 600,
+      "key": "facing3",
+      "down": true
+    },
+    {
+      "t": 600,
+      "key": "facing7",
+      "down": true
+    },
+    {
+      "t": 600,
+      "key": "facing9",
+      "down": true
+    },
+    {
+      "t": 600,
+      "key": "up",
+      "down": true
+    },
+    {
+      "t": 600,
+      "key": "down",
+      "down": true
+    },
+    {
+      "t": 600,
+      "key": "crouch",
+      "down": true
+    },
+    {
+      "t": 700,
+      "key": "facing1",
+      "down": true
+    },
+    {
+      "t": 700,
+      "key": "facing3",
+      "down": true
+    },
+    {
+      "t": 700,
+      "key": "facing7",
+      "down": true
+    },
+    {
+      "t": 700,
+      "key": "facing9",
+      "down": true
+    },
+    {
+      "t": 700,
+      "key": "up",
+      "down": true
+    },
+    {
+      "t": 700,
+      "key": "down",
+      "down": true
+    },
+    {
+      "t": 700,
+      "key": "crouch",
+      "down": true
+    }
+  ]
+}
