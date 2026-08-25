@@ -1121,6 +1121,16 @@ compiler inlined `_rand`/`_srand` from the static CRT):
 
 `game_render` and the status redraw perform no rand calls.
 
+**Idle-tick drift (verified empirically 2026-08-25):** the per-tick consumption
+above happens on EVERY 40 ms tick, including all idle ticks between
+`game_reset` (seed) and the first key press (~3 rand calls/tick observed). So the
+RNG position at any moment is a function of total ticks since the seed — two runs
+with the same seed but different idle durations reach different RNG positions at
+key-press and produce different dynamic spawn fields (observed ~4000 px diff).
+Static course layout (the 117 level_init calls) is unaffected. Seed-freeze
+verification must synchronize key input to the same tick count in both runs
+(e.g. rejection-sample on equal Dist at capture) — see Task 8 evidence.
+
 **Non-tick consumption (once per `game_start`):** `game_level_init` 0x404b50 runs in
 the GS-gate loop a `game_sprite_frame(0xd)` (rand(8)) + `rand(0x20)` for a pine gate
 that is never added to the list, plus a `rand(400)` whose result is discarded — 3
@@ -1184,13 +1194,16 @@ run state at distance 0. Consequences:
 - **No auto-start, no start key.** 10 s idle → scene fully static except the
   bench-with-two-figures idle animation (screen coords ≈ x 255–280, y 610–641 —
   part of the scene, not a state change). Speed stays 0 while idle.
-- **Any frame-changing key press starts the descent.** First arrow/numpad action
-  (e.g. Left or KP_1) changes the player frame (3 → skiing pose); physics then
-  accelerates the skier; in the slalom scenario speed rises to ~25 m/s and Dist
-  ticks. Numpad5 (the one numpad no-op) should NOT start it. The exact trigger
-  inside `game_physics` 0x401e50 (presumably "frame != idle frame 3" or mode/+0x4a
-  based) is an M2 question — the observable contract above is what the port must
-  match.
+- **Starting the descent: only keys that land on a travel frame.** From idle
+  frame 3: Numpad1 → frame 1, Right/Numpad6 → frame 2, Numpad3 → frame 4,
+  Numpad9 → frame 6 all start immediate travel (speed ramps to ~25 m/s, Dist
+  ticks). **Left/Numpad4 does NOT start it**: L[3] = 7 → steer −8 + frame 7
+  (lean row, max speed 0) — a transient ~200 ms lean that decays back to idle
+  frame 3 (verified: immediate direct-call state frame 7/steer −8/speed 0;
+  ~1 s later frame 3/steer 0). Numpad7 → frame 3 (stays idle), Numpad5 → no-op.
+  The exact travel-row model inside `game_physics` 0x401e50 is an M2 question —
+  the observable contract above is what the port must match. Scenarios must use
+  a travel-frame key (e.g. facing1 = Numpad1) as the start event.
 - **Enter** (0x0D) only restarts when no player exists (post-crash score screen).
 - **F2** = `game_restart` 0x406500 from ANY state: `game_reset()` (re-seeds RNG via
   GetTickCount — see §1) → if `c650` (paused by toggle) `game_pause_toggle()` →
