@@ -2,23 +2,25 @@
 
 Source: `original/ski32.exe` (i386, PE32, MSVC6-era, single source file `V:\hack\ski32\ski2.c`),
 decompiled with Ghidra 12.1.3 (project `ski32`, program `ski32.exe`) into `decompile/ghidra/*.c` —
-**163 functions** (`FUN_XXXXXXXX.c`), cross-referenced against the binary.
+**168 functions** (`FUN_XXXXXXXX.c`; 163 from the initial decompile + 5 added by the
+function-pointer audit, see *Function-pointer audit* below), cross-referenced against the binary.
 
 ## Classification summary
 
-- **104 GAME** (ski2.c logic — all renamed below with `ghidra_name` preserved)
-- **59 CRT** (MSVC6 C runtime + PE entry/exit/SEH — left unrenamed)
+- **106 GAME** (ski2.c logic — all renamed below with `ghidra_name` preserved)
+- **62 CRT** (MSVC6 C runtime + PE entry/exit/SEH — left unrenamed)
 
 Method: `harness/triage.py` heuristically classifies by scanning each `.c` for `DAT_0040XXXX`
 references into verified game-owned data ranges, then every classification was hand-verified by
-reading the decompiled C of all 163 functions (see *Triage adjustment* below).
+reading the decompiled C of all 163 functions (see *Triage adjustment* below); the 5 audit-added
+functions were classified from their decompiled C (2 GAME, 3 CRT).
 
 ## Naming convention
 
 | prefix | meaning |
 |---|---|
 | `main_*` | process entry (WinMain) |
-| `wproc_main_*` | SkiMain window handlers (the WndProc dispatcher itself at 0x405800 was **not** decompiled — see *Missing code*) |
+| `wproc_main_*` | SkiMain window handlers; `wproc_main` (0x405800) is the WndProc dispatcher itself |
 | `wproc_status_*` | SkiStatus window handlers (0x4068d0 is the real WndProc) |
 | `game_*` | game logic (entities, gates, spawning, style, pause, level, windows, sprites) |
 | `draw_*` | rendering (entities, scene, status values, text, offscreen) |
@@ -26,7 +28,7 @@ reading the decompiled C of all 163 functions (see *Triage adjustment* below).
 | `snd_*` | WAVE resource loading/playing (winmm `sndPlaySoundA`) |
 | `util_*` | helpers (rects, lerp, time fmt, string cache, bitmap load, asserts, facing math) |
 
-## Full function map (163)
+## Full function map (168)
 
 Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 
@@ -95,6 +97,7 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x404290 | game_gate_type4 | FUN_00404290 | 177 | GAME | gate type-4 behavior |
 | 0x404350 | game_gate_cruise | FUN_00404350 | 883 | GAME | gate/level entity update (types 5-8 crash objects; client height c6d8) |
 | 0x4046e0 | game_gate_scan | FUN_004046e0 | 222 | GAME | gate array scan: spawn within view band (c5fc +/- 0x3c, c684/c68c) |
+| 0x4047c0 | game_tick_cb | FUN_004047c0 | 22 | GAME | SetTimer callback (c940): if game active (c67c) -> game_tick; returns 1 |
 | 0x4047e0 | main_winmain | FUN_004047e0 | 213 | GAME | WinMain: lstrcmpiA "nosound" -> c794; game_init_mem, game_reset, game_create_windows, game_start; GetMessage/TranslateMessage/DispatchMessage loop; snd_shutdown; returns msg.wParam |
 | 0x4048c0 | game_init_mem | FUN_004048c0 | 138 | GAME | LocalAlloc pools: c674 str cache (0x50), c5f8 sprite cols (0x5a0), c648 entity pool (8000=100x80B), c758 gate descs (0x2400=100x36B); fatal "Insufficient local memory." on failure |
 | 0x404950 | util_fatal_msg | FUN_00404950 | 27 | GAME | fatal message: MessageBoxA(NULL, msg, "SkiFree" (RT 1), MB_ICONERROR=0x30) |
@@ -107,29 +110,30 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x405100 | game_gate_list_clear | FUN_00405100 | 30 | GAME | gate list clear (free descriptors, c720=NULL, c702=0) |
 | 0x405120 | game_gate_list_add | FUN_00405120 | 187 | GAME | gate list add: 36B descriptor from c758 (max 0x100), append to c720 |
 | 0x4051e0 | game_startpoles_spawn | FUN_004051e0 | 226 | GAME | spawn start flagpoles (type 0x11, frames 0x35-0x38) |
-| 0x4052d0 | game_create_windows | FUN_004052d0 | 842 | GAME | create_windows: GetDeviceCaps HORZRES/VERTRES (c6a0/c74c), c61c=hInstance, white brush c69c, FindWindowA("SkiMain") single-instance check, load 9 WAVE resources (gated by !c794), RegisterClassA SkiMain (WndProc = 0x405800, NOT decompiled) + SkiStatus (wproc_status) + button, CreateWindowExA both, icon (c120) |
+| 0x4052d0 | game_create_windows | FUN_004052d0 | 842 | GAME | create_windows: GetDeviceCaps HORZRES/VERTRES (c6a0/c74c), c61c=hInstance, white brush c69c, FindWindowA("SkiMain") single-instance check, load 9 WAVE resources (gated by !c794), RegisterClassA SkiMain (lpfnWndProc = wproc_main, 0x405800) + SkiStatus (wproc_status; the "button" string a1a4 is NOT registered — dead .rdata), CreateWindowExA both, icon (c120); c940 = &game_tick_cb; flags init c6d0=0, c770=1, c694=0, c67c=0 (starts paused) |
 | 0x405620 | snd_init | FUN_00405620 | 20 | GAME | snd_init: c790 = sndPlaySoundA import |
 | 0x405640 | snd_load_wave | FUN_00405640 | 83 | GAME | snd_load_wave: FindResourceA(hInst, id, "WAVE") -> pair {HGLOBAL, LockResource(pData)} |
 | 0x4056a0 | snd_shutdown | FUN_004056a0 | 131 | GAME | snd_shutdown: stop sound, FreeLibrary(c78c), free all 9 WAVE pairs |
 | 0x405730 | snd_free | FUN_00405730 | 38 | GAME | snd_free: FreeResource(pair[0]) |
-| 0x405760 | game_pause_toggle | FUN_00405760 | 89 | GAME | pause/resume toggle: running -> game_pause + title "Ski Paused ... Press F3 to continue" (RT 2); else title "SkiFree" (RT 1) + game_resume |
+| 0x405760 | game_pause_toggle | FUN_00405760 | 89 | GAME | pause/resume toggle (F2 key; also the post-assert path): running -> game_pause + title "Ski Paused ... Press F3 to continue" (RT 2); else title "SkiFree" (RT 1) + game_resume |
 | 0x4057c0 | game_pause | FUN_004057c0 | 52 | GAME | game_pause: KillTimer(0x29a), c600 = now, c6d0 = 0 |
-| 0x405a10 | game_pause_auto | FUN_00405a10 | 48 | GAME | auto pause/resume: if c694 && !c770 -> c67c=1 + game_resume; else c67c=0 + game_pause |
-| 0x405a40 | wproc_main_create | FUN_00405a40 | 111 | GAME | wproc_main WM_CREATE: GetDC (c63c), reset GDI objects, game_sprites_load; fatal "Whoa, like, can't load bitmaps!" on failure |
+| 0x405800 | wproc_main | FUN_00405800 | 513 | GAME | SkiMain WndProc dispatcher (computed jump table 0x4059c4/0x4059e0; code proper 451B, body includes the table): WM_CREATE -> wproc_main_create (return -1 on fail) + wproc_main_size; WM_DESTROY -> wproc_main_destroy + PostQuitMessage(0); WM_SIZE -> wproc_main_size + status reposition + c770=(wParam==SIZE_MINIMIZED) + game_pause_auto + UpdateWindow(main) if c67c; WM_ACTIVATE -> c694=wParam, SetFocus(main) if active, game_pause_auto; WM_ERASEBKGND -> wproc_main_paint; WM_GETMINMAXINFO -> min size 320x300; WM_MOUSEMOVE -> wproc_main_aim (if c67c); WM_KEYDOWN -> wproc_main_input (if c67c); WM_CHAR -> wproc_main_key (if c67c); WM_LBUTTONDOWN/LBUTTONDBLCLK -> wproc_main_turn (if c67c); WM_MOUSEACTIVATE -> MA_NOACTIVATE if screen-x==1; default -> DefWindowProcA |
+| 0x405a10 | game_pause_auto | FUN_00405a10 | 48 | GAME | auto pause/resume on activate/minimize: if window active (c694) && !minimized (c770) -> c67c=1 + game_resume; else c67c=0 + game_pause |
+| 0x405a40 | wproc_main_create | FUN_00405a40 | 111 | GAME | wproc_main WM_CREATE: GetDC (c63c), reset GDI objects, game_sprites_load; returns 0 on failure (WndProc then returns -1); fatal "Whoa, like, can't load bitmaps!" on failure; WndProc also calls wproc_main_size on success |
 | 0x405ab0 | game_sprites_load | FUN_00405ab0 | 996 | GAME | sprites_load: LoadBitmapA ids 1-0x59 (util_load_bitmap), build c5f8 column table, mask DCs (c710/c6a4/c730/c6ec) + offscreen bitmap |
 | 0x405ea0 | util_load_bitmap | FUN_00405ea0 | 20 | GAME | LoadBitmapA wrapper |
 | 0x405ec0 | wproc_main_destroy | FUN_00405ec0 | 214 | GAME | wproc_main WM_DESTROY: restore+delete GDI objects (DCs, bitmaps) |
-| 0x405fa0 | wproc_main_size | FUN_00405fa0 | 179 | GAME | wproc_main WM_SIZE: client rect (c6b0/c6b4/c6b8/c6bc), view bounds (c680-c68c), view width/area (c5f0/c748), client height (c6d8), center via game_set_center |
+| 0x405fa0 | wproc_main_size | FUN_00405fa0 | 179 | GAME | wproc_main WM_SIZE: client rect (c6b0/c6b4/c6b8/c6bc), view bounds (c680-c68c), view width/area (c5f0/c748), client height (c6d8), center via game_set_center; also invoked from the WM_CREATE success path |
 | 0x406060 | game_set_center | FUN_00406060 | 73 | GAME | reset entity rect-cache flags (list walk), set view center c5fc/c704 |
-| 0x4060b0 | wproc_main_paint | FUN_004060b0 | 71 | GAME | wproc_main WM_PAINT: BeginPaint, FillRect (white brush), draw_scene, EndPaint |
+| 0x4060b0 | wproc_main_paint | FUN_004060b0 | 71 | GAME | paint pass: BeginPaint, FillRect (white brush), draw_scene, EndPaint — called from the WM_ERASEBKGND case; the WM_PAINT message itself falls through to DefWindowProcA (original quirk) |
 | 0x406100 | draw_scene | FUN_00406100 | 112 | GAME | draw_scene: render pass (c618 list, offscreen c614) |
-| 0x406170 | wproc_main_input | FUN_00406170 | 565 | GAME | wproc_main input: WM_KEYDOWN/WM_CHAR -> action maps (a258/a25c); mouse aim (wproc_main_aim); wproc_main_turn / wproc_main_key |
-| 0x406500 | game_restart | FUN_00406500 | 76 | GAME | game_restart: if game_over -> game_reset + game_start + InvalidateRect/UpdateWindow, else DestroyWindow(main) |
-| 0x406550 | wproc_main_aim | FUN_00406550 | 136 | GAME | wproc_main aim: mouse pos -> facing via util_facing_delta/crouch -> set frame; store c700/c70c, c760=1 |
+| 0x406170 | wproc_main_input | FUN_00406170 | 565 | GAME | wproc_main keyboard handler (WM_KEYDOWN, gated by c67c in wproc_main): Enter=restart (only when no player), F1=restart, Esc=ShowWindow minimize, F2=game_pause_toggle; arrows/i/c/a/g/d/h/f/b/space/` keys -> facing frames (mode 0), steer +0x46 by -8/+8 (clamp 8) via tables a258/a25c, slide/jump frame-state transitions (frames 3/7/0xc/6/8/0xd/0xe/0xf/0x12/0x13/0x14/0x15); sets frame via game_entity_set_frame + renders if c610 |
+| 0x406500 | game_restart | FUN_00406500 | 76 | GAME | game_restart (Enter/F1 via wproc_main_input): if game_over -> game_reset + game_start + InvalidateRect/UpdateWindow, else DestroyWindow(main) |
+| 0x406550 | wproc_main_aim | FUN_00406550 | 136 | GAME | wproc_main mouse handler (WM_MOUSEMOVE, gated by c67c): mouse pos -> facing via util_facing_delta/crouch -> set frame; store c700/c70c, c760=1 |
 | 0x4065e0 | util_facing_delta | FUN_004065e0 | 132 | GAME | facing delta: upright orientation from mouse delta |
 | 0x406670 | util_facing_crouch | FUN_00406670 | 85 | GAME | facing crouch: crouched orientation from mouse delta |
-| 0x4066d0 | wproc_main_turn | FUN_004066d0 | 148 | GAME | wproc_main turn: key-repeat facing change; slide/jump states |
-| 0x406780 | wproc_main_key | FUN_00406780 | 203 | GAME | wproc_main key: X/Y/Z + numpad 1/2/3 = move +/-2, F = speed toggle (c670), R = redraw, T = manual tick (game_tick) |
+| 0x4066d0 | wproc_main_turn | FUN_004066d0 | 148 | GAME | wproc_main mouse button handler (WM_LBUTTONDOWN/LBUTTONDBLCLK, gated by c67c): key-repeat facing change; slide/jump states |
+| 0x406780 | wproc_main_key | FUN_00406780 | 203 | GAME | wproc_main char handler (WM_CHAR, gated by c67c): X/Y/Z + numpad 1/2/3 = move +/-2, F = speed toggle (c670), R = redraw, T = manual tick (game_tick) |
 | 0x406890 | wproc_status_reposition | FUN_00406890 | 58 | GAME | wproc_status reposition: place status window vs client rect (c66a/c66c vs c6b4/c6b8) |
 | 0x4068d0 | wproc_status | FUN_004068d0 | 119 | GAME | wproc_status: SkiStatus WndProc (WM_PAINT -> wproc_status_paint, WM_DESTROY -> wproc_status_destroy, reposition on move) |
 | 0x406970 | wproc_status_paint | FUN_00406970 | 253 | GAME | wproc_status_paint: FrameRect (c778), 4 labels (RT 3-6) + values (draw_status_values) |
@@ -140,6 +144,7 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x406cda | FUN_00406cda | — | 30 | CRT | CRT rand |
 | 0x406cf8 | FUN_00406cf8 | — | 139 | CRT | CRT _atoi |
 | 0x406d83 | entry | — | 235 | CRT | CRT PE entry (_tmainCRTStartup): env/heap/stdio/locale init, calls WinMain |
+| 0x406e6e | FUN_00406e6e | — | 11 | CRT | CRT abort-continuation stub (SEH table slot a568): rewrite SEH record handler -> FUN_00406e79, then __exit(code); no ret |
 | 0x406e79 | FUN_00406e79 | — | 34 | CRT | CRT abort path |
 | 0x406e9e | FUN_00406e9e | — | 35 | CRT | CRT abort path 2 |
 | 0x406ec2 | FUN_00406ec2 | — | 117 | CRT | CRT _getbyteclass |
@@ -158,8 +163,10 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x40768a | FUN_0040768a | — | 427 | CRT | CRT ctype/locale table init (cbc0-ccc0) |
 | 0x407835 | FUN_00407835 | — | 60 | CRT | CRT InitCommonControls import-table init (a860) |
 | 0x407874 | __global_unwind2 | — | 32 | CRT | CRT __global_unwind2 |
+| 0x407894 | FUN_00407894 | — | 34 | CRT | CRT SEH unwind-target helper (the address pushed as unwind target by __local_unwind2): if erec->flags & (EH_NESTED_CALL|EH_EXIT_UNWIND) -> *arg4 = arg3, return 3; else return 1 |
 | 0x4078b6 | __local_unwind2 | — | 104 | CRT | CRT __local_unwind2 |
 | 0x40794a | FUN_0040794a | — | 24 | CRT | CRT exception table lookup |
+| 0x40796c | FUN_0040796c | — | 189 | CRT | CRT SEH unwind/exit dispatcher (shared SEH-record target of entry/0x407bd0/0x4090ff): walks the handler table, invokes handlers, dispatches __global_unwind2/__local_unwind2/FUN_0040794a |
 | 0x407a29 | FUN_00407a29 | — | 27 | CRT | CRT __C_specific_handler |
 | 0x407a44 | FUN_00407a44 | — | 57 | CRT | CRT reported-error setup |
 | 0x407a7d | FUN_00407a7d | — | 339 | CRT | CRT runtime error report (shared c0dc string) |
@@ -195,14 +202,17 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x40934e | FUN_0040934e | — | 27 | CRT | CRT OOM handler |
 | 0x409370 | FUN_00409370 | — | 664 | CRT | CRT _memcpy |
 | 0x4096a6 | RtlUnwind | — | 6 | CRT | CRT RtlUnwind |
-### GAME functions (104) — renamed
+### GAME functions (106) — renamed
 
 See the table above for the per-function role. Key subsystems:
 
-- **Timing/pause**: `game_tick` (0x401000, driven by `SetTimer(hwnd, 0x29a, 40ms, timer_proc)`) →
-  `game_physics` (0x401e50) + `game_render` (0x401060). Pause: `game_pause` (0x4057c0, `KillTimer`),
-  resume: `game_resume` (0x404ad0). `game_pause_toggle` (0x405760) is F3 and the post-assert path;
-  `game_pause_auto` (0x405a10) pauses around the score dialog.
+- **Timing/pause**: `game_tick` (0x401000) is driven by the 40ms `SetTimer` callback
+  `game_tick_cb` (0x4047c0, c940), which calls `game_tick` only while the game is active (c67c);
+  `game_tick` -> `game_physics` (0x401e50) + `game_render` (0x401060). Pause: `game_pause`
+  (0x4057c0, `KillTimer`), resume: `game_resume` (0x404ad0). `game_pause_toggle` (0x405760) is
+  the F2 key and the post-assert path; `game_pause_auto` (0x405a10) pauses when the window is
+  deactivated or minimized (`c694`/`c770`) and resumes on activate+restore — see *WndProc
+  routing / auto-pause semantics* below.
 - **Entities**: 80B structs from a 100-slot pool (`c648`), freelist `c744`; types 0-17
   (0 = player, 1-10 spawnable obstacles/gates, 11-17 gate variants; 0x12 = "no spawn").
 - **Gates**: four arrays (`c5e0/c630/c658/c738`) + descriptor list (`c720`, 36B records in `c758`,
@@ -217,16 +227,19 @@ See the table above for the per-function role. Key subsystems:
   `{HGLOBAL, pData}` pairs; played via `sndPlaySoundA` (`c790`); disabled by the `nosound`
   cmdline flag (`c794`); pair map: id1→c6c0, id2→c768, id3→c5d0, id4→c718, id5→c750,
   id6→c628, id9→c6f0, id7→c6e0, id8→c608.
-- **Windows**: `main_winmain` → `game_create_windows` (0x4052d0) registers classes `SkiMain` /
-  `SkiStatus` / `button` and creates both windows (status window initial text = `c788`, an empty
-  64B buffer). The main window title is RT_STRING 1 (`SkiFree`); the paused title is RT_STRING 2.
+- **Windows**: `main_winmain` -> `game_create_windows` (0x4052d0) registers classes `SkiMain`
+  (WndProc = `wproc_main`, 0x405800) and `SkiStatus` (WndProc = `wproc_status`) and creates both
+  windows (status window initial text = `c788`, an empty 64B buffer). The main window title is
+  RT_STRING 1 (`SkiFree`); the paused title is RT_STRING 2. The game starts paused (c770=1,
+  c694=0, c67c=0) and only runs once the window is both activated and sized.
 
-### CRT functions (59) — left unrenamed
+### CRT functions (62) — left unrenamed
 
 All MSVC6 CRT: PE entry `0x406d83`, heap (`0x40813b-0x408de3`, heap state `c96c-c980`, threshold
 `c5c0`), string/locale/ctype (`0x40768a`, `0x407bd0`, `0x407d19-0x407f9a`, `0x408ede`, `0x4090ff`,
-`0x409370`, `0x408f70`, `0x409070`, `0x4082e0`, `0x408260`), exit/SEH (`0x406e79-0x407a7d`,
-`0x407874`, `0x4078b6`, `0x4096a6`), and `srand`/`rand`/`_atoi` (`0x406cd0-0x406cf8`).
+`0x409370`, `0x408f70`, `0x409070`, `0x4082e0`, `0x408260`), exit/SEH (`0x406e6e`,
+`0x406e79-0x407a7d`, `0x407874`, `0x407894`, `0x4078b6`, `0x40796c`, `0x4096a6`), and
+`srand`/`rand`/`_atoi` (`0x406cd0-0x406cf8`).
 Every CRT function with size > 400 was opened and checked: `0x4073a4` (cmdline split over ctype
 table `caa0`), `0x40768a` (ctype table init `cbc0-ccc0`), `0x407d5b` (codepage char lookup via
 `CodePage`/`c984`), `0x408360` (malloc free-list scan), `0x4086fe` (heap free, `c96c-c980`),
@@ -254,27 +267,88 @@ and cross-referencing the Ghidra data-reference dump (196 unique DAT addresses):
 
 Result: **76 GAME / 87 CRT (46.6%)** heuristic — no false positives (all 76 are truly game code).
 The 28 game functions with zero `DAT_` refs (pure computation or named-symbol string refs only)
-were reclassified to GAME by hand review — final truth: **104 GAME / 59 CRT**.
+were reclassified to GAME by hand review — for the original 163 functions the truth was
+**104 GAME / 59 CRT**. The follow-up function-pointer audit then added 5 functions (2 GAME:
+`game_tick_cb`, `wproc_main`; 3 CRT: SEH helpers) — final: **106 GAME / 62 CRT** (168 total).
 Missed-by-heuristic list: 1240, 1290, 12f0, 1350, 1540, 1a60, 1b20, 1d70, 20b0, 20d0, 2220, 2310,
 2350, 26a0, 2850, 2e30, 3430, 3750, 37b0, 4070, 41c0, 4290, 4950, 5100, 5730, 65e0, 6670, 6c50
 (all addresses 0x40-prefixed).
 
-## Missing code regions (concern for later tasks)
+## Function-pointer audit (follow-up, all targets resolved)
 
-Two code regions referenced by the decompiled code are **not** among the 163 decompiled functions
-(no `.c` files exist for them; both fall in Ghidra's label gaps):
+The initial triage flagged two `.text` targets referenced by decompiled code but absent from the
+163-function set (0x4047c0, 0x405800). A full audit was then performed; **every `.text` pointer
+target now has a decompiled function**.
 
-1. **0x4047c0-0x4047e0 (~32B timer callback)** — `DAT_0040c940 = &LAB_004047c0` is installed as the
-   `SetTimer` callback in `game_create_windows`; it is the per-tick entry point (presumably calls
-   `game_tick`/`game_pause_auto`). A later port task must re-decompile this to get the exact
-   timer semantics.
-2. **0x405800-0x405a10 (~528B main WndProc)** — `RegisterClassA("SkiMain", ..., lpfnWndProc =
-   &LAB_0x405800)` in `game_create_windows`. This is the SkiMain message dispatcher (routes to
-   `wproc_main_create`/`wproc_main_size`/`wproc_main_paint`/`wproc_main_input`/
-   `wproc_main_destroy`). Must be re-decompiled before the WASM port.
+1. **`&LAB_` targets in the decompiled C** — grep of all 163 `.c` files for `LAB_004xxxx`:
 
-The class-name copies at `a190/a198/a1a4` (`SkiMain`/`SkiStatus`/`button`) are likewise only
-referenced from code outside the 163-fn set (0x4052d0 uses identical inline literals).
+   | target | site | status |
+   |---|---|---|
+   | 0x4047c0 | `DAT_0040c940 = &LAB_004047c0` in `game_create_windows` (SetTimer callback) | was missing -> now `game_tick_cb` |
+   | 0x405800 | `local_28.lpfnWndProc = &LAB_00405800` in `game_create_windows` (SkiMain class) | was missing -> now `wproc_main` |
+   | 0x40796c | SEH-record unwind target (in `entry`, 0x407bd0, 0x4090ff) | was missing -> now FUN_0040796c |
+   | 0x407894 | unwind address pushed by `__local_unwind2` (and tested by the SEH frame-check at 0x40791e) | was missing -> now FUN_00407894 |
+
+   (Every other `LAB_` hit is an intra-function goto label, not a pointer.)
+
+2. **Static `.rdata`/`.data` pointer values** — every 4-byte value in `.rdata`
+   (0x40a000-0x40b0f0) and `.data` (0x40c000-0x40ccca) that falls in `.text`
+   (0x401000-0x4096ac): exactly 10 values, all covered after the audit:
+
+   | data addr | value | function |
+   |---|---|---|
+   | 0x40a564 | 0x406e5a | `entry` (SEH unwind target inside entry) |
+   | 0x40a568 | 0x406e6e | was missing -> now FUN_00406e6e (CRT abort-continuation stub) |
+   | 0x40a864 / 0x40a868 | 0x407cc9 / 0x407ccd | FUN_00407bd0 (SEH unwind targets) |
+   | 0x40a8ac / 0x40a8b0 / 0x40a8b8 / 0x40a8bc | 0x40920f / 0x409213 / 0x4092c3 / 0x4092c7 | FUN_004090ff (SEH unwind targets) |
+   | 0x40c00c | 0x40811f | FUN_0040811f |
+   | 0x40c170 | 0x406fb2 | `__exit` |
+
+   (c940 -> 0x4047c0 is zero-initialized in the image and set at runtime, so it does not appear
+   in a static file scan — covered by item 1. The a560 slot 0x40a560 = 0xFFFFFFFF is a
+   sentinel, and the bytes after 0x40a56c are CRT strings, not pointers.)
+
+3. **RegisterClassA WndProc fields**: SkiMain -> 0x405800 (now `wproc_main`); SkiStatus ->
+   0x4068d0 (`wproc_status`, already in the set); no third class is registered — the `button`
+   string at a1a4 has **no reference anywhere in `.text`** (dead `.rdata`).
+
+**Functions added by the audit** (created + decompiled by `harness/ghidra/AddFunctions.java`,
+invoked with `ADD_FN_ADDRS="0x4047c0 0x405800 0x406e6e 0x407894 0x40796c"`; script is
+idempotent — existing functions are skipped):
+
+| addr | name | size | class | role |
+|---|---|---|---|---|
+| 0x4047c0 | game_tick_cb | 22 | GAME | `if (c67c) game_tick(); return 1;` |
+| 0x405800 | wproc_main | 513 (code proper 451B + jump table) | GAME | SkiMain WndProc dispatcher |
+| 0x406e6e | FUN_00406e6e | 11 | CRT | abort-continuation stub: SEH record handler -> 0x406e79, `__exit(code)`, no ret |
+| 0x407894 | FUN_00407894 | 34 | CRT | SEH unwind-target helper |
+| 0x40796c | FUN_0040796c | 189 | CRT | SEH unwind/exit dispatcher |
+
+Residual un-decompiled bytes (not pointer targets, left as-is): 0x40791e-0x407940 (35B SEH
+frame-check predicate `fs:[0]+4 == 0x407894` — referenced nowhere in `.text`), 0x407941-0x407949
+(10B tail-jump thunk into FUN_0040794a — unreferenced), 0x407964-0x40796b (8B before the
+FUN_0040796c prologue — no references).
+
+**Class-name resolution** (previous concern, now precise): the `.rdata` copies `SkiMain`@a190
+and `SkiStatus`@a198 ARE referenced — by `game_create_windows` (0x4052d0) itself: a190 at
+0x405335 (FindWindowA class arg, single-instance check), 0x4054d5 (WNDCLASSEX.lpClassName) and
+0x40557d (CreateWindowExA class arg); a198 at 0x40550a (WNDCLASSEX.lpClassName) and 0x4055ac
+(CreateWindowExA class arg). Ghidra's decompiler renders these references as inline string
+literals, which is why the data-reference dump appeared empty. `button`@a1a4: zero references
+anywhere — dead string.
+
+**WndProc routing / auto-pause semantics** (from `wproc_main` + disassembly): the game runs
+only while `c67c` (game active) is set. `game_pause_auto` sets `c67c = c694 && !c770`, where
+`c694` = window active (WM_ACTIVATE: c694 = wParam) and `c770` = window minimized
+(WM_SIZE: c770 = (wParam == SIZE_MINIMIZED)). `game_create_windows` initializes c694=0, c770=1,
+c67c=0 — the game starts paused and resumes once the window is activated (WM_ACTIVATE ->
+SetFocus + game_pause_auto) and sized (WM_SIZE -> game_pause_auto + UpdateWindow if active).
+`c67c` gates the 40ms timer tick (`game_tick_cb`) and every input handler. Original quirks
+confirmed in the dispatcher: the scene is drawn from the WM_ERASEBKGND case (the WM_PAINT
+message goes to DefWindowProcA); the WM_CREATE case also invokes the WM_SIZE handler on
+success; WM_GETMINMAXINFO fixes the minimum window size at 320x300; WM_MOUSEACTIVATE returns
+MA_NOACTIVATE when the mouse screen-x == 1; the computed jump table (7 target dwords at
+0x4059c4, 33 index bytes at 0x4059e0) is resolved by Ghidra — all message cases decompiled.
 
 ## Globals
 
@@ -294,10 +368,12 @@ Full map in `decompile/ghidra/globals.json` (132 entries: every game data symbol
   player `c64c`/`c72c`, sprite column table `c5f8`, gate arrays `c5e0/c630/c658/c738` +
   descriptors `c758` (100×36B) + list `c720` + index `c702` + count `c6fc`, view rect
   `c6b0-c6bc` (client) / `c680-c68c` (extended by 0x78) + area `c748`, spawn cursors
-  `c5d8/c714` (step 0x3c), ticks (`c698` current, `c5f4` delta, `c708` resume, `c5dc` last
-  status, `c600` pause, `c6f8` style), timer (`c678` interval 40ms, `c6d0` active, `c940` proc
-  ptr), sound (`c790` fn ptr, `c794` disabled, 9 WAVE pairs, `c78c` HMODULE), style
-  accumulators `c944-c968`, score `c6a8`, string cache `c674`, screen `c6a0/c74c` (HORZ/VERTRES).
+  `c5d8/c714` (step 0x3c), active/minimize flags (`c694` window active, `c770` window
+  minimized, `c67c` game active = active && !minimized), ticks (`c698` current, `c5f4` delta,
+  `c708` resume, `c5dc` last status, `c600` pause, `c6f8` style), timer (`c678` interval 40ms,
+  `c6d0` active, `c940` proc ptr -> `game_tick_cb`), sound (`c790` fn ptr, `c794` disabled, 9
+  WAVE pairs, `c78c` HMODULE), style accumulators `c944-c968`, score `c6a8`, string cache
+  `c674`, screen `c6a0/c74c` (HORZ/VERTRES).
 - Resources: RT_STRING STRINGTABLE at VA 0x41c718 (17 length-prefixed UTF-16 entries, see below);
   9 RT_WAVE resources (ids 1-9) in `.rsrc`; icon `ICONSKI`/`ICONSKI2`.
 

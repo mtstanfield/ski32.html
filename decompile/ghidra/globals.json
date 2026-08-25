@@ -2,20 +2,24 @@
  "ski_main_class": {
   "addr": "0x40a190",
   "type": "const char \"SkiMain\" (main window class name)",
-  "refs": [],
-  "note": "referenced from code not in the 163-fn set (missing WndProc); game_create_windows uses an identical inline literal"
+  "refs": [
+   "game_create_windows"
+  ],
+  "note": "referenced by game_create_windows (0x4052d0) at 0x405335 (FindWindowA class arg), 0x4054d5 (WNDCLASSEX.lpClassName) and 0x40557d (CreateWindowExA class arg); the decompiler renders these as inline string literals"
  },
  "ski_status_class": {
   "addr": "0x40a198",
   "type": "const char \"SkiStatus\" (status window class name)",
-  "refs": [],
-  "note": "referenced from code not in the 163-fn set (missing WndProc); game_create_windows uses an identical inline literal"
+  "refs": [
+   "game_create_windows"
+  ],
+  "note": "referenced by game_create_windows (0x4052d0) at 0x40550a (WNDCLASSEX.lpClassName) and 0x4055ac (CreateWindowExA class arg); rendered as inline literals by the decompiler"
  },
  "button_class": {
   "addr": "0x40a1a4",
-  "type": "const char \"button\" (registered class name)",
+  "type": "const char \"button\" (class-name string, never registered)",
   "refs": [],
-  "note": "no reference from any of the 163 decompiled functions"
+  "note": "zero references anywhere in .text \u2014 dead .rdata string; no third RegisterClassA exists"
  },
  "frame_col_table": {
   "addr": "0x40a1ac",
@@ -572,12 +576,14 @@
    "game_resume"
   ]
  },
- "paused_by_dialog": {
+ "game_active": {
   "addr": "0x40c67c",
-  "type": "int flag (auto-pause across dialogs, set by game_pause_auto)",
+  "type": "int flag (game active = window_active && !window_minimized; set by game_pause_auto; gates the 40ms timer tick and every input handler; 0 at window creation)",
   "refs": [
    "game_create_windows",
-   "game_pause_auto"
+   "game_pause_auto",
+   "game_tick_cb",
+   "wproc_main"
   ]
  },
  "view_left": {
@@ -622,12 +628,13 @@
    "game_sprites_load"
   ]
  },
- "dialog_open": {
+ "window_active": {
   "addr": "0x40c694",
-  "type": "int flag (score/pause dialog open; used by game_pause_auto)",
+  "type": "int flag (window active: WM_ACTIVATE -> c694 = wParam; 0 at window creation)",
   "refs": [
    "game_create_windows",
-   "game_pause_auto"
+   "game_pause_auto",
+   "wproc_main"
   ]
  },
  "current_tick": {
@@ -1024,12 +1031,13 @@
    "game_collide"
   ]
  },
- "running": {
+ "window_minimized": {
   "addr": "0x40c770",
-  "type": "int flag (game running; used by game_pause_auto)",
+  "type": "int flag (window minimized: WM_SIZE -> c770 = (wParam == SIZE_MINIMIZED); 1 at window creation)",
   "refs": [
    "game_create_windows",
-   "game_pause_auto"
+   "game_pause_auto",
+   "wproc_main"
   ]
  },
  "status_rect": {
@@ -1076,12 +1084,11 @@
  },
  "timer_proc": {
   "addr": "0x40c940",
-  "type": "code* (SetTimer callback -> LAB_004047c0, NOT in the 163 decompiled fns)",
+  "type": "code* (SetTimer callback pointer; = &game_tick_cb at 0x4047c0, installed by game_create_windows)",
   "refs": [
    "game_resume",
    "game_create_windows"
-  ],
-  "note": "target LAB_004047c0-0x4047e0 is not among the 163 decompiled functions"
+  ]
  },
  "style_dist": {
   "addr": "0x40c944",
@@ -1189,7 +1196,7 @@
  },
  "rt_string_table": {
   "addr": "0x41c718",
-  "type": "RT_STRING resource (id 1) — STRINGTABLE, 17 length-prefixed UTF-16 entries, 364 bytes",
+  "type": "RT_STRING resource (id 1) \u2014 STRINGTABLE, 17 length-prefixed UTF-16 entries, 364 bytes",
   "refs": [
    "main_winmain",
    "draw_status_values",

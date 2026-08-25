@@ -735,6 +735,17 @@
   "ghidra_name": "FUN_004046e0"
  },
  {
+  "name": "game_tick_cb",
+  "addr": 4212672,
+  "size": 22,
+  "file": "FUN_004047c0.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c67"
+  ],
+  "ghidra_name": "FUN_004047c0"
+ },
+ {
   "name": "main_winmain",
   "addr": 4212704,
   "size": 213,
@@ -1001,6 +1012,21 @@
    "c6d"
   ],
   "ghidra_name": "FUN_004057c0"
+ },
+ {
+  "name": "wproc_main",
+  "addr": 4216832,
+  "size": 513,
+  "file": "FUN_00405800.c",
+  "class": "GAME",
+  "dat_refs": [
+   "c62",
+   "c67",
+   "c69",
+   "c6c",
+   "c77"
+  ],
+  "ghidra_name": "FUN_00405800"
  },
  {
   "name": "game_pause_auto",
@@ -1328,6 +1354,14 @@
   "dat_refs": []
  },
  {
+  "name": "FUN_00406e6e",
+  "addr": 4222574,
+  "size": 11,
+  "file": "FUN_00406e6e.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
   "name": "FUN_00406e79",
   "addr": 4222585,
   "size": 34,
@@ -1472,6 +1506,14 @@
   "dat_refs": []
  },
  {
+  "name": "FUN_00407894",
+  "addr": 4225172,
+  "size": 34,
+  "file": "FUN_00407894.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
   "name": "__local_unwind2",
   "addr": 4225206,
   "size": 104,
@@ -1484,6 +1526,14 @@
   "addr": 4225354,
   "size": 24,
   "file": "FUN_0040794a.c",
+  "class": "CRT",
+  "dat_refs": []
+ },
+ {
+  "name": "FUN_0040796c",
+  "addr": 4225388,
+  "size": 189,
+  "file": "FUN_0040796c.c",
   "class": "CRT",
   "dat_refs": []
  },
