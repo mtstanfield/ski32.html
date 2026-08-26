@@ -1153,6 +1153,14 @@ with the original per-tick stream.
   (a) the Speed display `+0x48*1000/(c5f4<<4)`, (b) style-run timing via
   `util_lerp` on `c698`/`c708`, (c) the 327 ms status throttle. Physics does not
   scale with the delta — a slow system simply plays slower.
+  **Consequence for the deterministic build (T11/T14):** under `SKI_DETERMINISTIC`
+  the GetTickCount reads become a virtual clock advanced exactly 40 ms/tick, so the
+  rebuild's Speed display is a constant (`speed*1000/640`, e.g. 25.00) while the
+  original under Wine jitters with real timer deltas (39/40/41 ms → 24.41–25.97).
+  The Task 14 pixel diff must therefore accept the panel Speed digit (and the
+  sub-pixel AA flicker documented in evidence/t8-check.txt) as expected panel
+  variance; the 0-px requirement applies to the game-scene region (panel
+  x620-760, y0-60 masked).
 - **Input structure: message-consumed, no key-state global** — see Data model
   *Input*. All control is applied synchronously inside WndProc handlers (WM_KEYDOWN /
   WM_CHAR / WM_MOUSEMOVE / WM_LBUTTONDOWN / WM_RBUTTONDOWN), gated by `c67c`. No
