@@ -158,6 +158,6 @@ void ski_rand_seed(uint32_t seed); /* 0x406cd0 (T11) */
 void ski_render(HDC hdc, const RECT *rc); /* 0x401060 scene render */
 void ski_paint_scene(HDC hdc, const RECT *rc); /* 0x406100 cull + render */
 void ski_status_draw_values(HDC hdc); /* 0x401b80 panel values (T12) */
-void ski_fmt_style(uint32_t v, char *buf); /* 0x401d70 style format (T12) */
+void ski_fmt_time(uint32_t ms, char *buf); /* 0x401d70 "%2u:%2.2u:%2.2u.%2.2u" (id 11) */
 
 #endif /* SKI_GAME_H */

@@ -507,9 +507,13 @@ void ski_status_draw_values(HDC hdc)
     g_c5dc = g_c698;
 }
 
-/* 0x401d70 — style format into buf. */
-void ski_fmt_style(uint32_t v, char *buf)
+/* 0x401d70 — ms -> "%2u:%2.2u:%2.2u.%2.2u" (string id 11) into buf. */
+void ski_fmt_time(uint32_t ms, char *buf)
 {
-    (void)v;
-    buf[0] = '\0'; /* T12 */
+    uint32_t centi = (ms % 1000) / 10;
+    uint32_t s = (ms / 1000) % 0x3c;
+    uint32_t rest = (ms / 1000) / 0x3c;
+    uint32_t m = rest % 0x3c;
+    uint32_t h = rest / 0x3c;
+    wsprintfA(buf, ski_str_cache(STR_FMT_TIME), h, m, s, centi);
 }
