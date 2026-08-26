@@ -378,12 +378,20 @@ Full map in `decompile/ghidra/globals.json` (132 entries: every game data symbol
   `c6d0` active, `c940` proc ptr -> `game_tick_cb`), sound (`c790` fn ptr, `c794` disabled, 9
   WAVE pairs, `c78c` HMODULE), style accumulators `c944-c968`, score `c6a8`, string cache
   `c674`, screen `c6a0/c74c` (HORZ/VERTRES).
-- Resources: RT_STRING STRINGTABLE at VA 0x41c718 (17 length-prefixed UTF-16 entries, see below);
-  89 RT_BITMAP sprites + 6 RT_ICON + 2 RT_GROUP_ICON in `.rsrc` — **no RT_WAVE node**
+- Resources: RT_STRING string blob at VA 0x410718 (.rsrc file offset 0xf718; 17
+  length-prefixed UTF-16 entries, mapping runtime-verified below); 89 RT_BITMAP sprites
+  + 6 RT_ICON + 2 RT_GROUP_ICON in `.rsrc` — **no RT_WAVE node**
   (the 9 `snd_load_wave` FindResourceA calls all return NULL at runtime; see M1#3);
   icon `ICONSKI`/`ICONSKI2`.
 
-## RT_STRING table (17 strings, VA 0x41c718)
+## RT_STRING table (17 strings, VA 0x410718)
+
+**Runtime-verified** with the LoadStringA probe (`harness/strprobe/strprobe.c`, run under
+Wine against the original exe): ids 1..17 resolve exactly as below; id 0 and ids 18+
+fail. The PE's RT_STRING resource directory is hand-rolled/malformed (two table nodes,
+ids 1/2, whose data entries don't parse), but Wine resolves the contiguous blob — a
+standard `.rc` STRINGTABLE with explicit ids 1..17 reproduces this mapping exactly,
+which is what the rebuild's `resources.rc` must contain.
 
 | id | string | used by |
 |---|---|---|
@@ -430,10 +438,10 @@ Template (zero-init, +0x1c=0x40) at `c030`; pool 100×80B at `c648`.
 
 ## Extracted resources (M1 — 89 sprites + string tables → `web/assets/`)
 
-`harness/extract_resources.py` pulls all 89 RT_BITMAP sprites and both RT_STRING groups out of
+`harness/extract_resources.py` pulls all 89 RT_BITMAP sprites and the RT_STRING blob out of
 `original/ski32.exe` and writes `web/assets/sprites/bmp_NNN.png` (ids 1-89) +
-`web/assets/resources.json` (per-bitmap `{w, h, bpp, file}` + both string groups). Verified
-89/89, exit 0.
+`web/assets/resources.json` (per-bitmap `{w, h, bpp, file}` + string table — now the
+runtime-verified `strings.by_id` map, ids 1-17). Verified 89/89, exit 0.
 
 ### DIB format (as stored in `.rsrc`)
 
@@ -447,18 +455,18 @@ Every leaf is a 4-bit DIB, but **not** stock BMP:
 - Leaf data entries in this PE store the **file offset** (not an RVA) — the extractor validates
   each of three candidate offsets (file-off, `+base`, RVA-mapped) against the header + size.
 
-### RT_STRING groups
+### RT_STRING raw layout (supersedes the earlier two-group description)
 
-Format: length-prefixed UTF-16LE entries `[u8 len][u8 pad][2·len chars]` — **not** a stock
-STRINGTABLE (no leading count). Group 1 terminates after 16 entries; group 2 after 2 (then zero pad).
-
-- **Group 1** (16 entries, first empty): `''`, `SkiFree`, `Ski Paused ... Press F3 to continue`,
-  `Time:`, `Dist:`, `Speed:`, `Style:`, `00:00:00.00`, ` 0000m`, ` 0000m/s`, `0000000`,
-  `%2u:%2.2u:%2.2u.%2.2u`, `%5.2dm`, `%5.2dm/s`, `%7ld`, `High Scores`
-- **Group 2** (2 entries): ` <-- that's you!`, ` <-- try again!`
-
-(17 distinct named strings total; the score suffixes live in group 2, the UI/format strings in
-group 1. This matches the 17-string `.rdata` STRINGTABLE documented above, which is the same set.)
+The string data is ONE contiguous blob at `.rsrc` file offset 0xf718 (VA 0x410718),
+length-prefixed UTF-16LE entries `[u8 len][u8 pad][2·len chars]`, in this order:
+`SkiFree`, `Ski Paused ... Press F3 to continue`, `Time:`, `Dist:`, `Speed:`, `Style:`,
+`00:00:00.00`, ` 0000m`, ` 0000m/s`, `0000000`, `%2u:%2.2u:%2.2u.%2.2u`, `%5.2dm`,
+`%5.2dm/s`, `%7ld`, `High Scores`, then two zero-length slots, then
+` <-- that's you!`, ` <-- try again!`, then zero pad. The earlier "group 1 = 16 entries
+(first empty) / group 2 = 2 entries" split (and the leading `''`) was a parser artifact of
+the hand-rolled blob — the runtime LoadStringA probe proves there is no resolvable empty
+entry and no two-table split: ids 1..17 map to the 17 named strings in the order above.
+`web/assets/resources.json` now stores the runtime-verified `strings.by_id` map.
 
 ### Sprite inventory (89)
 
@@ -1219,7 +1227,7 @@ run state at distance 0. Consequences:
   `game_start` returns 0 → `DestroyWindow` (process exit).
 - **F3** = `game_pause_toggle` 0x405760 from ANY state: unpaused → `game_pause`
   0x4057c0 (KillTimer, `c650 = 1`, status text "Ski Paused ... Press F3 to
-  continue" via LoadStringA id 3 + SetWindowTextA, InvalidateRect); paused →
+  continue" via LoadStringA id 2 + SetWindowTextA(main), InvalidateRect); paused →
   `c650 = 0` + `game_resume` 0x404ad0 (SetTimer). Verified live: F3 → c6d0 1→0,
   c650 0→1; F2 → c6d0 0→1, c650 1→0 (restart also clears the latch); F3 again →
   paused again.
