@@ -8,10 +8,15 @@ add_compile_definitions(
   SKI_DETERMINISTIC=$<IF:$<BOOL:${SKI_DETERMINISTIC}>,1,0>
   SKI_HARNESS=$<IF:$<BOOL:${SKI_HARNESS}>,1,0>
 )
-set(SKI_SOURCES src/ski_main.c src/ski_core.c)
+set(SKI_SOURCES src/ski_win.c src/ski_core.c)
 if(EMSCRIPTEN)
   file(GLOB SHIM_SOURCES shim/*.c)
   list(APPEND SKI_SOURCES ${SHIM_SOURCES})
+else()
+  list(APPEND SKI_SOURCES src/resources.rc) # windres: bitmaps + string table
+  # windres resolves bitmap paths relative to CWD; give it the source root.
+  set_source_files_properties(src/resources.rc PROPERTIES
+    COMPILE_FLAGS "--include-dir=${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
 add_executable(ski ${SKI_SOURCES})
 if(EMSCRIPTEN)
@@ -26,4 +31,5 @@ if(EMSCRIPTEN)
 else()
   target_compile_options(ski PRIVATE -O2 -mfpmath=387 -Wall)
   target_link_options(ski PRIVATE -mwindows)
+  target_link_libraries(ski PRIVATE winmm) # PlaySoundA
 endif()

@@ -117,7 +117,7 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x405730 | snd_free | FUN_00405730 | 38 | GAME | snd_free: FreeResource(pair[0]) |
 | 0x405760 | game_pause_toggle | FUN_00405760 | 89 | GAME | pause/resume toggle (**F3 key**, verified 2026-08-25; also the post-assert path): running -> game_pause + title "Ski Paused ... Press F3 to continue" (RT 2); else title "SkiFree" (RT 1) + game_resume |
 | 0x4057c0 | game_pause | FUN_004057c0 | 52 | GAME | game_pause: KillTimer(0x29a), c600 = now, c6d0 = 0 |
-| 0x405800 | wproc_main | FUN_00405800 | 513 | GAME | SkiMain WndProc dispatcher (computed jump table 0x4059c4/0x4059e0; code proper 451B, body includes the table): WM_CREATE -> wproc_main_create (return -1 on fail) + wproc_main_size; WM_DESTROY -> wproc_main_destroy + PostQuitMessage(0); WM_SIZE -> wproc_main_size + status reposition + c770=(wParam==SIZE_MINIMIZED) + game_pause_auto + UpdateWindow(main) if c67c; WM_ACTIVATE -> c694=wParam, SetFocus(main) if active, game_pause_auto; WM_PAINT -> wproc_main_paint; WM_GETMINMAXINFO -> min size 320x300 (fields at lParam+0x18/+0x1C); WM_ERASEBKGND -> unhandled (default class-brush erase); WM_MOUSEMOVE -> wproc_main_aim (if c67c); WM_KEYDOWN -> wproc_main_input (if c67c); WM_CHAR -> wproc_main_key (if c67c); WM_LBUTTONDOWN/LBUTTONDBLCLK -> wproc_main_turn (if c67c); WM_MOUSEACTIVATE -> MA_NOACTIVATE if screen-x==1; default -> DefWindowProcA |
+| 0x405800 | wproc_main | FUN_00405800 | 513 | GAME | SkiMain WndProc dispatcher (computed jump table 0x4059c4/0x4059e0; code proper 451B, body includes the table): WM_CREATE -> wproc_main_create (return -1 on fail) + wproc_main_size; WM_DESTROY -> wproc_main_destroy + PostQuitMessage(0); WM_SIZE -> wproc_main_size + status reposition + c770=(wParam==SIZE_MINIMIZED) + game_pause_auto + UpdateWindow(main) if c67c; WM_ACTIVATE -> c694=wParam, SetFocus(main) if active, game_pause_auto; WM_PAINT -> wproc_main_paint; message 0x24 (36 — an UNUSED Windows message number; not WM_NCCREATE 0x81, not WM_GETMINMAXINFO 0x13) -> stores 0x140/0x12c at lParam+0x18/+0x1c and returns 0 (dead code, verified 2026-08-26 from the raw dispatch — no minimum window size is ever set); WM_MOUSEACTIVATE (0x21) -> return 2 (MA_ACTIVATEANDEAT) iff mouse screen-x ((short)lParam) == 1, else return 0; WM_ERASEBKGND -> unhandled (default class-brush erase); WM_MOUSEMOVE -> wproc_main_aim (if c67c); WM_KEYDOWN -> wproc_main_input (if c67c); WM_CHAR -> wproc_main_key (if c67c); WM_LBUTTONDOWN/LBUTTONDBLCLK -> wproc_main_turn (if c67c); WM_MOUSEACTIVATE -> MA_NOACTIVATE if screen-x==1; default -> DefWindowProcA |
 | 0x405a10 | game_pause_auto | FUN_00405a10 | 48 | GAME | auto pause/resume on activate/minimize: if window active (c694) && !minimized (c770) -> c67c=1 + game_resume; else c67c=0 + game_pause |
 | 0x405a40 | wproc_main_create | FUN_00405a40 | 111 | GAME | wproc_main WM_CREATE: GetDC (c63c), reset GDI objects, game_sprites_load; returns 0 on failure (WndProc then returns -1); fatal "Whoa, like, can't load bitmaps!" on failure; WndProc also calls wproc_main_size on success |
 | 0x405ab0 | game_sprites_load | FUN_00405ab0 | 996 | GAME | sprites_load: LoadBitmapA ids 1-0x59 (util_load_bitmap), build c5f8 column table, mask DCs (c710/c6a4/c730/c6ec) + offscreen bitmap |
@@ -133,7 +133,7 @@ Role text is grounded in the decompiled C (`decompile/ghidra/FUN_*.c`).
 | 0x4065e0 | util_facing_delta | FUN_004065e0 | 132 | GAME | facing delta: upright orientation from mouse delta |
 | 0x406670 | util_facing_crouch | FUN_00406670 | 85 | GAME | facing crouch: crouched orientation from mouse delta |
 | 0x4066d0 | wproc_main_turn | FUN_004066d0 | 148 | GAME | wproc_main mouse button handler (WM_LBUTTONDOWN/LBUTTONDBLCLK, gated by c67c): key-repeat facing change; slide/jump states |
-| 0x406780 | wproc_main_key | FUN_00406780 | 203 | GAME | wproc_main char handler (WM_CHAR, gated by c67c): X/Y/Z + numpad 1/2/3 = move +/-2, F = speed toggle (c670), R = redraw, T = manual tick (game_tick) |
+| 0x406780 | wproc_main_key | FUN_00406780 | 203 | GAME | wproc_main char handler (WM_CHAR, gated by c67c; idx = char−0x58, table @0x40686c, jt @0x40684c; **CORRECTED 2026-08-26 from raw disasm — the earlier 'X/Y/Z + numpad / F/R/T' row is void**): 'X' → teleport x−2, 'Y' → teleport y−2, 'x' → teleport x+2, 'y' → teleport y+2 (teleport = 0x402390, args x=+0x40 y=+0x42 mode=+0x44, player-gated), 'f' → c670 = !c670 (turbo), 'r' → game_render(c63c, &c6b0), 't' → game_tick (manual); everything else no-op |
 | 0x406890 | wproc_status_reposition | FUN_00406890 | 58 | GAME | wproc_status reposition: place status window vs client rect (c66a/c66c vs c6b4/c6b8) |
 | 0x4068d0 | wproc_status | FUN_004068d0 | 119 | GAME | wproc_status: SkiStatus WndProc (WM_PAINT -> wproc_status_paint, WM_DESTROY -> wproc_status_destroy, reposition on move) |
 | 0x406970 | wproc_status_paint | FUN_00406970 | 253 | GAME | wproc_status_paint: FrameRect (c778), 4 labels (RT 3-6) + values (draw_status_values) |
@@ -350,9 +350,14 @@ SetFocus + game_pause_auto) and sized (WM_SIZE -> game_pause_auto + UpdateWindow
 `c67c` gates the 40ms timer tick (`game_tick_cb`) and every input handler. Original quirks
 confirmed in the dispatcher: the scene is drawn from the WM_PAINT case (WM_ERASEBKGND is
 unhandled — the default class-brush erase runs); the WM_CREATE case also invokes the WM_SIZE handler on
-success; WM_GETMINMAXINFO fixes the minimum window size at 320x300; WM_MOUSEACTIVATE returns
-MA_NOACTIVATE when the mouse screen-x == 1; the computed jump table (7 target dwords at
-0x4059c4, 33 index bytes at 0x4059e0) is resolved by Ghidra — all message cases decompiled.
+success; **CORRECTED 2026-08-26 (raw dispatch at 0x405800-0x405995 re-verified byte-by-byte):
+the 0x140/0x12c stores belong to a handler for message 0x24 (36, an unused message number —
+neither WM_NCCREATE 0x81 nor WM_GETMINMAXINFO 0x13), so they are dead code and NO minimum
+window size is ever set; WM_MOUSEACTIVATE (0x21) returns 2 (MA_ACTIVATEANDEAT) only when the
+mouse screen-x ((short)lParam) == 1, otherwise returns 0 (not MA_NOACTIVATE); the jump table
+covers only msgs 1..0x21 (33 index bytes at 0x4059e0, 7 targets at 0x4059c4) — everything
+else (incl. all NC/mouse/key messages > 0x24) takes the code paths: 0x200 mousemove,
+0x100 keydown, 0x102 char (all c67c-gated), 0x201/0x203 buttons, default -> DefWindowProcA.**
 
 ## Globals
 
@@ -378,7 +383,7 @@ Full map in `decompile/ghidra/globals.json` (132 entries: every game data symbol
   `c6d0` active, `c940` proc ptr -> `game_tick_cb`), sound (`c790` fn ptr, `c794` disabled, 9
   WAVE pairs, `c78c` HMODULE), style accumulators `c944-c968`, score `c6a8`, string cache
   `c674`, screen `c6a0/c74c` (HORZ/VERTRES).
-- Resources: RT_STRING string blob at VA 0x410718 (.rsrc file offset 0xf718; 17
+- Resources: RT_STRING string blobs in **.data** at VA 0x410718 (file offset 0x1c718; 17
   length-prefixed UTF-16 entries, mapping runtime-verified below); 89 RT_BITMAP sprites
   + 6 RT_ICON + 2 RT_GROUP_ICON in `.rsrc` — **no RT_WAVE node**
   (the 9 `snd_load_wave` FindResourceA calls all return NULL at runtime; see M1#3);
@@ -413,26 +418,34 @@ which is what the rebuild's `resources.rc` must contain.
 | 16 | ` <-- that's you!` | score suffix (placed) |
 | 17 | ` <-- try again!` | score suffix (not placed) |
 
-## Entity struct (80B, 20 dwords) — inferred from code
+## Entity struct (80B, 20 dwords)
 
-| off | field |
-|---|---|
-| +0x00 | next (active list) |
-| +0x04 | group partner / next-in-group |
-| +0x08 | group prev (walked by `game_group_head`) |
-| +0x0c | prev (active list) |
-| +0x10 | sprite column (short) |
-| +0x11 | mode (short; 0x0b upright, 0x11 crouched) |
-| +0x14 | sprite column-array pointer (into `c5f8` table) |
-| +0x18 | type (0-17) |
-| +0x1c | frame (0-63; template default 0x40) |
-| +0x20..0x2b | world rect {x1, y1, x2, y2} (rect-cache flag 4 at +0x4c) |
-| +0x2c.. | group bounding box |
-| +0x40..0x44 | sprite geometry shorts (width/height/offset for `game_entity_rect_calc`) |
-| +0x42 | position short (player: y; distance = y/16 meters, per `%5.2dm` format) |
-| +0x46 | anim state |
-| +0x48 | distance/anim |
-| +0x4c | flags byte: 1=in-list, 2=group, 4=rect-cached, 8=dead, 0x10=in-group, 0x20=col-changed |
+**CORRECTED 2026-08-26: the player position/mode offsets below were re-verified against the
+raw disassembly (teleport 0x402390, keydown 0x406170, char 0x406780, click 0x4066d0, aim
+0x406550 all load x from +0x40, y from +0x42, mode from +0x44). The decompiler misread these
+as +0x10/+0x11/+0x12 in several functions — the disassembly is authoritative. The earlier
+"x +0x20, y +0x24 (world rect)" reading was wrong; +0x20..+0x3f is still unresolved (T11
+physics).**
+
+| off | field | status |
+|---|---|---|
+| +0x00 | next (active list) | verified (list walks) |
+| +0x04 | group partner / next-in-group | inferred (`game_group_head` 0x402220 walk) |
+| +0x08 | group prev | inferred (same) |
+| +0x0c | prev (active list) | inferred |
+| +0x10 | sprite column (u16, spans +0x10..+0x11) | verified (`set_col` 0x402180 writes +0x10) |
+| +0x12..+0x13 | padding — never accessed (full `.text` scan: zero +0x12/+0x13 entity accesses; the decompiler's "mode +0x11" is a misread) | verified 2026-08-26 |
+| +0x14 | sprite column-array pointer (into `c5f8` table, +col·0x10) | verified (`set_col` writes +0x14) |
+| +0x18 | type (u32 slot, low16 used, 0-0x11) | verified |
+| +0x1c | frame (u32) | verified |
+| +0x20..+0x3f | UNRESOLVED (earlier "world rect {x1,y1,x2,y2} + group bbox" reading wrong) | T11 |
+| +0x40 | x (u16, 1/16 m) | verified (teleport/char/click/keydown) |
+| +0x42 | y (u16, 1/16 m; distance = y/16 meters, per `%5.2dm`) | verified |
+| +0x44 | mode (u16; 0 = upright/normal, ≠0 = crouch/jump mode) | verified |
+| +0x46 | steer (i16, −8..+8) | verified (keydown steer ±8) |
+| +0x48 | speed (i16, 1/16 m per tick) | verified (keydown −4 on jump frames) |
+| +0x4a | crouch/jump (u16; 2 = crouch via Insert/Numpad0, 4 = jump via mouse click) | verified |
+| +0x4c | flags (u32): 1=in-list, 2=group, 4=rect-cached, 8=dead, 0x10=in-group, 0x20=col/pos-changed | verified (T7) |
 
 Template (zero-init, +0x1c=0x40) at `c030`; pool 100×80B at `c648`.
 
@@ -999,18 +1012,22 @@ rotates 0→1→2→3 then steers (frame → 7); repeated Right rotates 0→4→
 After any action: tail 0x40636f — `if (esi != player->frame) { set_frame(player,
 esi); if (c610) { game_render(0x401060); c610 = 0; } }`.
 
-**Verified WM_CHAR debug keys (0x406780; range check `'X' ≤ c ≤ 'y'`; table
-@0x40686c, jt @0x40684c; `set_pos` = 0x402390, args (x, y, mode), player-gated):**
+**Verified WM_CHAR debug keys (0x406780; idx = char−0x58 over idx table
+@0x40686c, jt @0x40684c; teleports via 0x402390 with disasm-verified arg loads
+x=+0x40, y=+0x42, mode=+0x44; player-gated). CORRECTED 2026-08-26 from the raw
+disassembly — the earlier table ('v'/'w' aliases, 'g'/'o'/'q') was wrong:
+both prior decodings misread the index-table bytes.**
 
 | char | action |
 |---|---|
-| 'X' (0x58) | x −= 2 |
-| 'Y' (0x59) | y −= 2 |
-| 'x' (0x78) **and 'v' (0x76)** | x += 2 |
-| 'y' (0x79) **and 'w' (0x77)** | y += 2 |
-| 'g' (0x67) | `c670 = !c670` (double-step / turbo toggle) |
-| 'o' (0x6f) | `game_render` |
-| 'q' (0x71) | `game_tick` (manual tick, independent of the timer) |
+| 'X' (0x58) | teleport x −= 2 |
+| 'Y' (0x59) | teleport y −= 2 |
+| 'f' (0x66) | `c670 = !c670` (double-step / turbo toggle) |
+| 'r' (0x72) | `game_render(c63c, &c6b0)` |
+| 't' (0x74) | `game_tick` (manual tick, independent of the timer) |
+| 'x' (0x78) | teleport x += 2 |
+| 'y' (0x79) | teleport y += 2 |
+| everything else | no-op |
 
 (T7's 'f'/'r'/'t' entries were wrong — those chars are no-ops; the actual chars are
 'g'/'o'/'q' as decoded from the 0x40686c table.)
@@ -1255,3 +1272,38 @@ or call the pause_auto resume path — before the first scenario frame.
 **Static Time display:** the status panel's Time value stays 0:00:00.00 in every
 observed state (menu, running, paused); only Dist/Speed/Style update. Faithful to
 reproduce.
+
+## T10 — window + message layer reconstructed (2026-08-26, commit TBD)
+
+The window/message layer is now implemented in `src/ski_win.c` (WinMain
+0x4047e0, create_windows 0x4052d0, wproc_main 0x405800, input handlers, status
+window family, pause/resume/restart/reset lifecycle, 40 ms callback timer), with
+the T10 leaves (string cache, fatal/assert boxes, sound path, bitmap loader, text
+helpers) and all `.data` globals in `src/ski_core.c`. T11/T12 stubs carry the
+game-logic/render gaps.
+
+Verified under Wine/Xvfb :99 (SKIdeterministic build `build-native/ski.exe`):
+
+- **Geometry**: exactly one X11 window, "SkiFree", 760x734 client at (132,30) on
+  the 1024x768 Xvfb — CreateWindowExA(0x2cf0000, x=(1024-768)/2=128, y=0,
+  768x768) minus Wine's 4px border + 26px titlebar. Matches `m0-geometry.txt`.
+- **Boot sequence (message trace, SKI_HARNESS build)**: WM_NCCREATE (0x81) →
+  DefWindowProc; WM_CREATE → create+size; WM_MOUSEACTIVATE (lp=0 → return 0);
+  WM_ACTIVATE(1) → c694=1; WM_SIZE(0) → c770=0 → pause_auto → **c67c=1, c6d0=1
+  (SetTimer armed)**; WM_PAINT → paint handler. Then the 40 ms callback timer
+  fires `ski_tick`: 288 ticks in ~11.5 s measured (probe file, SKI_HARNESS).
+- **Status panel**: Time:/Dist:/Speed:/Style: labels render top-right from the
+  rebuilt `resources.rc` STRINGTABLE via LoadStringA (ids 3-6) — reproduces the
+  original's runtime-verified id→string map.
+- **Message routing**: wproc_main transcribed verbatim from the raw dispatch
+  (jump table 0x4059c4/0x4059e0 covers msgs 1..0x21 only; msg 0x24 = 36 is a
+  dead store path; 0x200/0x100/0x102 c67c-gated; 0x201/0x203 click; default →
+  DefWindowProcA). See the corrected rows at 0x405800 and the WndProc routing
+  section above.
+
+Open items handed to T11/T12: `ski_game_start` stays a stub (faithful body would
+call the still-stub `ski_entity_alloc`/`ski_teleport` and destroy the window at
+boot); `ski_level_init`, `ski_tick`, `ski_render`, `ski_paint_scene`,
+`ski_status_draw_values` are stubs; the rebuild icon is NULL (the original loads
+"iconSki" RT_ICON — only affects the Wine-drawn frame, never the captured
+client area).

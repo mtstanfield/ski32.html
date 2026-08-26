@@ -7,3 +7,5 @@ evidence/*.tmp
 harness/.venv/
 build-native/
 build-wasm/
+build-native-harness/
+harness/strprobe/*.exe
