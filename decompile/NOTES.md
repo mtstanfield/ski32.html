@@ -1499,9 +1499,14 @@ then applied the code-quality review findings. Disposition:
   claimed [−0x3c0,−0x1c0] was an arithmetic error on the same bytes; the
   code (−0x240/−0x140) was correct all along.
 - **e67e404 aim revert — CONFIRMED.** 0x406587-0x40659a: ECX = mouseX −
-  c704.lo (center X), EDX = mouseY − c5fc.lo (center Y); size hook
-  0x406097/0x40609f writes c5fc = height/2, c704 = width/2. No cross-swap;
-  the interim swap was reverted.
+  c704.lo, EDX = mouseY − c5fc.lo; no cross-swap; the interim swap was
+  reverted. (CORRECTION 2026-08-27, T12: c5fc/c704 are NOT width/2 and
+  height/2 — the CALLER 0x405fc0 computes param1 = (left+right)/2 → c704
+  (center X) and param2 = (top+bottom)/3 → c5fc via the imul 0x55555556
+  high-part idiom (0x405fcc); the size hook 0x406097/0x40609f just stores
+  the params. Observed c5fc = 244 for the 734px client (734/3 = 244) —
+  c5fc is the 1/3-down anchor, not the center. All C code reads the
+  runtime globals, so the transcription is unaffected.)
 - **e67e404 pick_mid tail — CONFIRMED.** 0x402838-0x402841 `add $0x10,%eax`
   is 32-bit: 0xFFFFFFFE + 0x10 → 0x0000000E. r ∈ [60,80) → 0x0e,
   r ∈ [80,99] → 0x10 (both valid types; no ghost/assert).
