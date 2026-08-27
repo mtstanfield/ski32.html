@@ -1307,3 +1307,122 @@ boot); `ski_level_init`, `ski_tick`, `ski_render`, `ski_paint_scene`,
 `ski_status_draw_values` are stubs; the rebuild icon is NULL (the original loads
 "iconSki" RT_ICON — only affects the Wine-drawn frame, never the captured
 client area).
+
+## T11 notes (2026-08-26)
+
+The full game core is implemented in `src/ski_core.c`: entity pool (alloc /
+copy / template / freelist, 100 slots x 80B), lifecycle (die / split / group
+merge / reap), geometry (teleport / set_pos / world_shift / rect_calc /
+overlap), motion (step, lerp), spawning (per-type entity_new, startpoles,
+gates), animation (types 1/2/3/9/10; a308/a490/a4e0 rows; a22c spawn frames;
+a434 sound frames), the five gate lists (36B descriptors; level_layout with
+its 3x39 RNG draw order; scan / cruise), physics (per-type update incl. the
+player), collisions, monsters, style sections (SS 0x402c60 / FS 0x403180 /
+GS 0x403250), score (score_add / score_show), timer (c698/c5f4/c708), and
+reset / restart. Both build targets (`build-native`, `build-native-harness`)
+are green with zero -Wall warnings (baseline zero). All rand()/srand() go
+through the MSVC LCG helpers (`ski_rand()`/`ski_rand_seed()`, g_c16c) with
+1:1 call order.
+
+### Entity struct layout fix (the "frame = 0x0170" bug)
+
+The C struct had drifted from the disasm-verified offsets: `type` was
+declared `uint8_t` + `uint8_t` pad, so the compiler placed `frame` at 0x1a
+(not 0x1c), `rect` at 0x1c (not 0x20), `x` at 0x44 (not 0x40), and
+`sizeof` = 84 (not 80). `ski_win.c` uses byte-offset access (the DWORD read
+at +0x1c in 0x4061be; ENT_* macros at 0x40/0x44/0x46/0x48/0x4a) and was
+therefore hitting *different fields* than `ski_core.c`'s member accesses:
+Left keydown read the player's cached `rect[0]` as "frame" (368 > 0x15) and
+tripped the 0xf63 assert, while steer/crouch/mode writes landed in the wrong
+words. Fixed in `ski_game.h`: `type` is the uint32_t dword slot at 0x18
+(low byte = type), `frame` u16 @0x1c, `_pad_1e` u16 @0x1e (the high word of
+the key handler's DWORD read — always 0 from the zeroed template),
+`rect[4]` i32 @0x20, `bbox[4]` @0x30, x@0x40, y@0x42, mode@0x44, steer@0x46,
+speed@0x48, transition@0x4a, flags u32 @0x4c, sizeof 80 — with
+`_Static_assert` guards on every verified offset. After the fix: no assert
+on Left, steering works, descent is stable at ~25 ticks/s.
+
+### Disasm-verified fixes (objdump evidence)
+
+- **reap 0x401390**: edi = list pointer, esi = node; the DEAD path splices
+  the node WITHOUT advancing edi (next iteration reads `*edi` = the active
+  successor); the ALIVE path sets `edi = esi`; the loop does `esi = *edi`.
+  The C idiom "advance after unlink" walks into the freelist chain; once two
+  dead nodes are reaped on successive ticks they form a 2-cycle -> infinite
+  loop (the observed hang ~32-64 ticks after first culling).
+- **anim_type10 case 0x3c**: jump table @0x4038fc = {0x403809, 0x40385c,
+  0x4038c0, 0x4038ce}; case 0x3c's target (0x4038ce) falls through the tail
+  0x4038e9 (step + set_frame with the ORIGINAL frame). Case 0x3c keeps its
+  frame and breaks (Ghidra rendered a step that is not in the disasm).
+- **style_ss 0x402c60 arm band**: 402dd1/402dd7 `cmp $0xfdc0,%ax; jl` /
+  `cmp $0xfec0,%ax; jg` = x in [-576, -320] at the y=0x280 crossing —
+  mathematically identical to Ghidra's `-0x241 < x < -0x13f` rendering. The
+  finish check (y > 0x21c0) runs ONLY while armed (c95c != 0); arming needs
+  the player steered into the left band (natural drift crosses ~9px short).
+  On arm: c6f8 = c94c (SS gate list); passing a gate advances c6f8 by 0x24
+  (36B descriptor; Ghidra's "+9" misrender).
+- **Left key clamp**: `steer -= 8; if (steer < -7) steer = -8;` —
+  decompile-faithful (behaviorally identical to `steer < -8`).
+- **key handler 0x406170**: 4061be `mov 0x1c(%eax),%esi` = DWORD read at
+  player+0x1c (frame | word@0x1e); 0xf63 (Left) / 0xf6b (Right) assert when
+  > 0x15. The original trips these only when frame > 0x15; with the zeroed
+  template word@0x1e = 0, they are effectively a frame-range check. Kept
+  faithful (NOT weakened) — with the struct fix they no longer misfire.
+- **LocalAlloc pool**: original FUN_004048c0 = `LocalAlloc(0, 8000)`
+  (decimal 8000, not 0x2000). Allocation order c674(0x50), c5f8(0x5a0),
+  c648(8000), c758(0x2400); only c674 is memset.
+- **Wine LocalAlloc does NOT zero** (measured: 5920/8000 bytes nonzero under
+  this Wine). The `.data` pool copy is dead (the original heap-allocs it
+  too); the runtime word@0x1e = 0 comes from the zeroed template (BSS),
+  matching the original's observable behavior (original does not assert on
+  Left).
+- **set_pos 0x401a60** split condition: `test $0x1,%al` (flags&1); the
+  `shl $0x1d; sar $0x1f` idiom computes flags&4 for a separate `keep` value
+  (bVar4 path sets flag 0x04 via `(keep|8)<<2`).
+- **c5f2** = camera Y (u16 @0x40c5f2, written by the world_shift tail, reset
+  in game_reset) — Ghidra's `DAT_0040c5f0._2_2_` is a misread of the same
+  address.
+- **rect is 4x int32**: x1/y1 sign-extended from i16, x2/x3 un-truncated
+  sums.
+- **physics spawn cursors** are u16 arithmetic (g_c5d8 ± g_c5f2 with u16
+  wrap; loop compares i16 against ±0x3c).
+- **score_show**: INI section "Ski" / file "entpack.ini", `%9ld`,
+  `_atoi` == `atoi`, unconditional MessageBoxA at the end. score_add is
+  c954-gated, no clamping. fmt_time returns int (wsprintfA length).
+- **gate_scan**: forward loop skips dy < low; the backward walk ends the
+  cursor at the LAST entry with dy < low; the update loop processes from
+  there including one out-of-view entry.
+- **anim rows verified byte-for-byte against the PE**: a308 (22 rows),
+  a490 (6), a4e0 (8) — the original `.rdata` dump matches the transcription
+  exactly. Frame-1 row = {accel 1, max 12, decay 1, win 1, sign -1}: the
+  idle player's slight left drift is original behavior, not a bug.
+
+### Timing (c5f4)
+
+Under `#if SKI_DETERMINISTIC`: `c698 += SKI_TIMER_MS (40)` and
+`c5f4 = 40` exactly per tick (matches the 40 ms SetTimer cadence; M1 answer
+2, commit b6facf5) — no clock reads in the update path. Under `#else` the
+faithful GetTickCount difference is transcribed.
+
+### Smoke (SKIdeterministic harness build, Xvfb :99)
+
+- KP_1 starts the descent; ticks advance ~25/s; >60 s descent with no
+  assert and no hang (the pre-fix 0xf63 assert on Left was the struct-drift
+  bug above, not an assert bug).
+- No steering: the player crosses y=0x280 at x ~= -311, 9px short of the SS
+  band -> not armed -> skis into the void forever (faithful: no finish
+  check without arming).
+- 1.5 s / 0.6 s Left hold: crossing x ~= -790 / -770 (overshoot; any hold
+  latches the turn frame via X auto-repeat and it keeps steering after
+  release — no auto-center, matches the original key handler).
+- **Full loop verified**: single Left tap 0.7 s after KP_1 keyup ->
+  crossing x ~= -520 (in band) -> SS armed -> descent through the slalom
+  section -> finish at y > 0x21c0 -> `ski_score_show` -> "High Scores"
+  MessageBox showing `0:01:28.32 <-- that's you!` (fmt_time + STR_SUFFIX_YOU,
+  entpack.ini round-trip) — captured in `evidence/m2-gamecore.png` (client
+  area is white because T12 rendering is still stubbed; status labels
+  Time:/Dist:/Speed:/Style: render top-right). Ticks freeze while the modal
+  is up (message loop blocked — original behavior). Closing the modal
+  (Return) and pressing F2 restarts: full state reset observed
+  (cam_y=0, c5d8=0, c714=0, player x=0 y=0 fr=3 steer=0 speed=0) with ticks
+  resuming at ~25/s.

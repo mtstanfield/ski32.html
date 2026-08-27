@@ -221,7 +221,7 @@ static void ski_key_down(uint32_t vk)
         new_frame = ski_steer_table[frame].left;
         if (new_frame == 7) {
             short steer = ENT16(g_c72c, ENT_STEER) - 8;
-            if (steer < -8)
+            if (steer < -7)
                 steer = -8;
             ENT16W(g_c72c, ENT_STEER) = steer;
         }
