@@ -1396,6 +1396,83 @@ on Left, steering works, descent is stable at ~25 ticks/s.
   a490 (6), a4e0 (8) — the original `.rdata` dump matches the transcription
   exactly. Frame-1 row = {accel 1, max 12, decay 1, win 1, sign -1}: the
   idle player's slight left drift is original behavior, not a bug.
+- **pick_mid 0x4027e0 tail is a live assert bug in the original**:
+  `cmp $0x50,%ax; sbb %eax,%eax; and $0xfe,%al; add $0x10,%eax` returns
+  0x10 for r in [60,80] and **0x10E** for r in [81,99] (0xFFFFFFFE + 0x10
+  wraps to 0x0000010E). Spawn 0x402645-0x402663 passes the FULL 32-bit
+  picker result to sprite_frame (unsigned `ja` bound 0xb..0x10 at 0x402853),
+  so 0x10E asserts 0x623, then 0x57c in entity_new_col (type range,
+  0x4026c5), and STILL creates the entity with dword type 0x10E, frame 0.
+  Reproduced 1:1. Ground truth: ~5 min KP_1 straight-descent run of the
+  original on :99 produced no 0x623 dialog (center-zone mid picks with
+  r>80 apparently rare in that run); a review pass had claimed the band
+  returned "0x100e" — the true value is 0x0000010E (same high word).
+  The pickers' band tables otherwise disasm-verified: pick_speed
+  (c6fc<=c748>>6 -> 0xb else 0x12), pick_narrow (r==0 -> 2 else 0xd),
+  pick_wide (r<50->0xa, <500->0xd, <700->0xf, <750->0xb, <950->0xe,
+  <970->0x10, else 2; the sbb/add $2 tail can only yield 2 since r<1000).
+- **Entity type store is a DWORD**: 0x402109 / 0x4026d9 `mov %edi,0x18(%esi)`
+  — the full 32-bit picker result lands in the +0x18 dword slot (for the
+  0x10E ghost: +0x18=0x0E, +0x19=0x01, +0x1a..+0x1b=0; nothing reads those
+  pad bytes, but the store width is faithful now).
+- **Mouse-aim register mapping (caller 0x406550)**: the original computes
+  `DX = mouseX - c5fc` (window HEIGHT) and `CX = mouseY - c704` (window
+  WIDTH) — a cross-axis quirk (0x40658d/0x406596/0x406598/0x40659a). Both
+  aim functions' decompile param_1 = CX, param_2 = DX (verified per-quadrant
+  against 0x406670-0x4066c4). So `ski_aim_facing(cx, dx)` /
+  `ski_aim_crouch(cx, dx)` take (CX, DX); facing: ladder iff dx>0 && cx!=0,
+  r = idiv(dx*4, cx), tail 0x406655 `test CX; setge; ...; add $6` -> cx>=0
+  -> 6, cx<0 -> 0x103 (out-of-range frame, original quirk; col 0 via the
+  .rdata ski_frame_col table). ski_win.c's caller was passing
+  (x - c704, y - c5fc) — both subtrahends were swapped; fixed to
+  (cx = y - c704, dx = x - c5fc).
+
+### Spec-review fixes (post-commit ef40b3d, 2026-08-27)
+
+Main's spec review (T11SpecReview) returned 9 BLOCKERs + minors. Disposition,
+each item re-verified against disasm/decompile before touching code:
+
+- **P1 (spawn zone) — REJECTED, false positive.** Reviewer claimed the speed
+  zone is x in [-0x3c0,-0x1c0] but cited `cmp $0xfdc0`/`cmp $0xfec0` at
+  0x4025dd/0x4025e3, which decode to [-0x240,-0x140] — the code was already
+  correct. Left unchanged.
+- **P3 (pick_speed) — verified correct as written** (0x402770:
+  `setle(c6fc, c748>>6)`; c6fc <= round -> 0xb else 0x12).
+- **P5 (pick_mid bands) — applied, reviewer value corrected.** First
+  application used the reviewer's "0x100e", which made sprite_frame assert
+  0x623 on every mid spawn with r in [60,80) and froze the smoke test at
+  tick 512. Disasm 0x402838-0x402840 gives 0x10 (r<=80) / 0x10E (r>80) —
+  see the pick_mid entry above; final code returns the faithful 0x10/0x10e.
+- **M1 (collide player-hit) — verified 1:1** with 0x403a00: desc frame=0x32,
+  e->steer=0, desc fdelta=0, e->speed=0, desc vx=0, desc timestamp=c698;
+  vy (+0x1e) is NOT cleared; assert 0x95c when the group pointer is NULL.
+- **IDIV1 — ski_idiv is C `/` (truncate-toward-zero)**, matching x86 idiv;
+  the earlier "floor" interpretation was wrong.
+- **AIM1 — applied + register-mapping corrected this turn.** Ladder
+  boundaries disasm-verified via jg/jl at 0x4065fb-0x40664d (inclusive
+  r<=-12/-6/-3/-1 and r>=12/6/3/1); r==0 falls through to the tail (the
+  `jl 0x406655` at 0x40664d — no ret-6). The 0x103 tail is an ORIGINAL
+  out-of-range-frame quirk, gated on CX<0 (0x406655-0x406663:
+  `test CX; setge; dec; and $0xfd; add $6`); ski_frame_col[0x103] = 0 from
+  the .rdata table. Ghidra's param_1 = CX, param_2 = DX (proven per-quadrant
+  on 0x406670), and the caller 0x406550 cross-swaps the window dimensions —
+  see the mouse-aim entry above.
+- **AN1 (anim multiplier) — applied.** 0x403467 loads the DWORD at +0x1c
+  (frame|pad): multiplier = e->frame when row[8] != 0, else signum(steer)
+  (jge/setg: -1 if steer<0, 1 if steer>0, 0 otherwise).
+- **L1 — banner y += c5f2** at all three sites (0x404bbe/0x404d29/0x404e99);
+  c5f2 is zeroed by game_reset so this is latent, but faithful.
+- **L2 — SS gate loop x**: b=1 -> -496 (0xffffffa0 + 0xfffffe70 wraps to
+  0xfffffe10), b=0 -> -400.
+- **L3 — FS gate loop x**: b=1 -> 400, b=0 -> 432.
+- **L4 — startpoles**: pole1 y = c5f2, pole2 y = c5f2 + h36 + 4.
+- **A1 — set_frame assert IDs** 0x43c (NULL), 0x43d (frame >= 0x40 before
+  change-check), 0x440 (after change-check).
+- **A2 — group_merge assert IDs** 0x4e4-0x4e8, 0x4ec.
+- **A3 — bbox_expand NULL asserts** 0x16d/0x16e.
+- **N2 — anim type10 default** keeps the existing frame (no 0x3d write).
+- **N1 — SKIPPED**: 0x27 vs 0x2a stack-residue difference verified
+  behaviorally neutral (register spill, no observable effect).
 
 ### Timing (c5f4)
 

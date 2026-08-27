@@ -339,13 +339,13 @@ static void ski_mouse_aim(short x, short y)
         g_c72c != NULL &&
         ENT32(g_c72c, ENT_FRAME) != 0xb &&
         ENT32(g_c72c, ENT_FRAME) != 0x11) {
-        short dx = x - g_c704;
-        short dy = y - g_c5fc;
+        short cx = y - g_c704; /* CX reg (0x40658d/0x406596): mouseY - width */
+        short dx = x - g_c5fc; /* DX reg (0x406598/0x40659a): mouseX - height */
         uint32_t f;
         if (ENT16(g_c72c, ENT_MODE) == 0)
-            f = ski_aim_facing(dx, dy); /* 0x4065e0 */
+            f = ski_aim_facing(cx, dx); /* 0x4065e0 */
         else
-            f = ski_aim_crouch(dx, dy); /* 0x406670 (zero-extended byte) */
+            f = ski_aim_crouch(cx, dx); /* 0x406670 (zero-extended byte) */
         ski_set_frame(g_c72c, f);
     }
     g_c700 = x;

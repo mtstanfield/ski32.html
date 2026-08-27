@@ -373,13 +373,11 @@ void ski_text_extent(HDC hdc, short *maxw, const char *s, int len)
 
 #define SKI_ASSERT_FILE "V:\\hack\\ski32\\ski2.c" /* .data 0x40c090 */
 
-/* x86 `idiv` semantics: quotient rounded toward -infinity (not C's trunc). */
+/* x86 `idiv` semantics: quotient truncated TOWARD ZERO — identical to the
+ * C signed `/` operator (verified: cltd;idiv at lerp 0x402e65, aim 0x4065f8). */
 static int32_t ski_idiv(int32_t a, int32_t b)
 {
-    int32_t q = a / b;
-    if (a % b != 0 && ((a % b) < 0) != (b < 0))
-        q--;
-    return q;
+    return a / b;
 }
 
 /* 0x406cda — MSVC CRT rand algorithm (verbatim; does NOT touch c748). */
@@ -416,12 +414,29 @@ void ski_snd_play(ski_sound_t *p)
 
 /* --- .rdata tables (dumped from the PE, verified against the disasm) --- */
 
-/* a1ac: frame -> sprite column (64 x u16). */
-static const uint16_t ski_frame_col[64] = {
+/* a1ac: frame -> sprite column, 264 x u16 (frames 0..0x105), extracted
+ * byte-for-byte from the original .rdata (file offset 0xa1ac, 528B). The
+ * original indexes it as *(u16*)(0x40a1ac + 2*frame) with NO bounds check,
+ * so out-of-range frames (e.g. the 0x103 aim tail) read the same garbage
+ * the original reads: frame 0x103 -> col 0x0000 (PE .rdata 0x40a3b2). */
+static const uint16_t ski_frame_col[264] = {
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
     17, 18, 19, 20, 21, 22, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37,
     38, 39, 40, 41, 42, 43, 44, 65, 66, 67, 68, 69, 70, 71, 72, 73,
-    74, 75, 76, 77, 78, 79, 80, 81, 83, 84, 85, 84, 49, 87, 88, 89
+    74, 75, 76, 77, 78, 79, 80, 81, 83, 84, 85, 84, 49, 87, 88, 89,
+    6, 0, 22, 0, 27, 0, 31, 0, 39, 0, 42, 0, 42, 0, 42, 0,
+    42, 0, 56, 0, 60, 0, 1, 0, 4, 0, 2, 0, 0, 0, 3, 0,
+    1, 0, 7, 0, 2, 0, 0, 0, 5, 0, 4, 0, 6, 0, 5, 0,
+    8, 0, 3, 0, 2, 0, 5, 0, 6, 0, 9, 0, 2, 0, 5, 0,
+    10, 0, 3, 0, 6, 0, 3, 0, 6, 0, 14, 0, 15, 0, 16, 0,
+    13, 0, 13, 0, 16, 0, 15, 0, 14, 0, 14, 0, 15, 0, 20, 0,
+    21, 0, 20, 0, 21, 0, 16, 0, 13, 0, 13, 0, 16, 0, 1, 16,
+    0, 0, 0, 0, 0, 0, 1, 12, 1, 1, 65535, 0, 1, 0, 1, 6,
+    1, 4, 65535, 0, 2, 0, 1, 0, 1, 8, 65535, 0, 3, 0, 1, 12,
+    1, 1, 1, 0, 4, 0, 1, 6, 1, 4, 1, 0, 5, 0, 1, 0,
+    1, 8, 1, 0, 6, 0, 1, 0, 1, 8, 65535, 0, 7, 0, 1, 0,
+    1, 8, 1, 0, 8, 0, 1, 0, 0, 0, 0, 0, 9, 0, 1, 0,
+    0, 0, 0, 0, 10, 0, 0, 0
 };
 
 /* a22c: spawn frame per type index (12 x u32; types up to 0x11). */
@@ -572,7 +587,7 @@ ski_ent_t *ski_entity_alloc(int type, uint32_t frame)
     if (e != NULL) {
         if (type < 0) ski_assert_fail(SKI_ASSERT_FILE, 0x56c);
         if (type > 0x11) ski_assert_fail(SKI_ASSERT_FILE, 0x56d);
-        e->type = (uint8_t)type;
+        e->type = (uint32_t)type; /* 0x402109: mov %edi,0x18(%esi) full dword */
         e = ski_set_frame(e, frame);
     }
     return e;
@@ -585,7 +600,7 @@ ski_ent_t *ski_entity_new_col(int type, uint16_t col)
     if (e != NULL) {
         if (type < 0) ski_assert_fail(SKI_ASSERT_FILE, 0x57b);
         if (type > 0x11) ski_assert_fail(SKI_ASSERT_FILE, 0x57c);
-        e->type = (uint8_t)type;
+        e->type = (uint32_t)type; /* 0x4026d9: mov %edi,0x18(%esi) full dword */
         e = ski_entity_set_col(e, col);
     }
     return e;
@@ -594,11 +609,13 @@ ski_ent_t *ski_entity_new_col(int type, uint16_t col)
 /* 0x402120 */
 ski_ent_t *ski_set_frame(ski_ent_t *e, uint32_t frame)
 {
-    if (e == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0x3e3);
+    if (e == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0x43c);
+    if (frame >= 0x40)
+        ski_assert_fail(SKI_ASSERT_FILE, 0x43d); /* fires BEFORE the change-check */
     if (e->frame != frame) {
         uint32_t c;
         if (frame >= 0x40) {
-            ski_assert_fail(SKI_ASSERT_FILE, 0x3f0);
+            ski_assert_fail(SKI_ASSERT_FILE, 0x440);
             c = 0;
         } else {
             c = ski_frame_col[frame];
@@ -655,6 +672,8 @@ ski_ent_t *ski_group_head(ski_ent_t *e)
 /* 0x401b20 */
 void ski_bbox_expand(int32_t *dst, const int32_t *src)
 {
+    if (dst == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0x16d);
+    if (src == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0x16e);
     if (dst[0] > src[0]) dst[0] = src[0];
     if (dst[1] > src[1]) dst[1] = src[1];
     if (src[2] > dst[2]) dst[2] = src[2];
@@ -664,15 +683,15 @@ void ski_bbox_expand(int32_t *dst, const int32_t *src)
 /* 0x401a60 */
 void ski_group_merge(ski_ent_t *a, ski_ent_t *b)
 {
-    if (a == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0x322);
-    if (b == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0x323);
-    if ((a->flags & 0x10) == 0) ski_assert_fail(SKI_ASSERT_FILE, 0x324);
-    if ((b->flags & 0x10) == 0) ski_assert_fail(SKI_ASSERT_FILE, 0x325);
-    if (a == b) ski_assert_fail(SKI_ASSERT_FILE, 0x326);
+    if (a == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0x4e4);
+    if (b == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0x4e5);
+    if ((a->flags & 0x10) == 0) ski_assert_fail(SKI_ASSERT_FILE, 0x4e6);
+    if ((b->flags & 0x10) == 0) ski_assert_fail(SKI_ASSERT_FILE, 0x4e7);
+    if (a == b) ski_assert_fail(SKI_ASSERT_FILE, 0x4e8);
     ski_ent_t *last = a;
     while (last->gnext != NULL) {
         if ((last->gnext->flags & 0x10) == 0)
-            ski_assert_fail(SKI_ASSERT_FILE, 0x32b);
+            ski_assert_fail(SKI_ASSERT_FILE, 0x4ec);
         last = last->gnext;
     }
     last->gnext = b;
@@ -845,7 +864,8 @@ int ski_spawn_pick_wide(void)
 
 int ski_spawn_pick_speed(void)
 {
-    if ((g_c748 >> 6) <= g_c6fc)
+    /* 0x402786-0x40278b: setle(c6fc, round(c748/64)) — c6fc <= c748>>6. */
+    if (g_c6fc <= (g_c748 >> 6))
         return 0xb;
     return 0x12;
 }
@@ -866,7 +886,14 @@ int ski_spawn_pick_mid(void)
     if (r < 20) return 0xd;
     if (r < 50) return 0xf;
     if (r < 60) return 0xb;
-    return 0x10;
+    /* 0x402838-0x402840: sbb -> 0xffffffff/0; and $0xfe,%al -> 0xfffffffe/0;
+     * add $0x10 (32-bit) -> 0x10e (r>80) / 0x10 (r<=80). 0x10e is outside
+     * sprite_frame's unsigned switch range (0xb..0x10): the original asserts
+     * 0x623, then 0x57c in entity_new_col, and still creates the entity
+     * (dword type 0x10e, frame 0). Reproduced 1:1; ground-truth 98s run of
+     * the original showed no such assert (see NOTES T11). */
+    if (r <= 80) return 0x10;
+    return 0x10e;
 }
 
 /* 0x4025c0 — spawn where the cursor sits; the zone (picker) is chosen by
@@ -1460,9 +1487,9 @@ ski_ent_t *ski_collide(ski_ent_t *e1, ski_ent_t *e2)
             ski_gate_desc_t *d = (ski_gate_desc_t *)e1->desc;
             d->frame = 0x32;
             e1->steer = 0;
-            d->vx = 0;
+            d->fdelta = 0; /* +0x1a */
             e1->speed = 0;
-            d->vy = 0;
+            d->vx = 0; /* +0x1c; vy (+0x1e) is NOT touched */
             d->timestamp = g_c698;
             return ski_set_frame(e1, 0x32);
         }
@@ -1479,7 +1506,7 @@ ski_ent_t *ski_collide(ski_ent_t *e1, ski_ent_t *e2)
 /* --- player style sections (SS / FS / GS) ------------------------------ */
 
 /* 0x402e30 — linear interpolation at `target` between (t0,b) and (t1,a);
- * division is idiv (floor). */
+ * division is idiv (truncates toward zero). */
 int ski_lerp(int a, int b, int t1, int t0, int target)
 {
     if (t1 == t0)
@@ -1634,23 +1661,26 @@ void ski_style_gs(ski_ent_t *e, short x_prev, short y_prev)
 
 /* --- entity animation --------------------------------------------------- */
 
-/* 0x403430 — shared speed/steer easing. Disasm-verified: row->sign and the
- * current steer are loaded zero-extended (movw), so a negative sign acts as
- * a large positive multiplier that wraps mod 2^16 at the final steer store
- * (i.e. steer -> -s3); reproduced exactly. */
+/* 0x403430 — shared speed/steer easing. Disasm-verified: when row[8] != 0
+ * the multiplier is the entity's FRAME (0x403467 loads the DWORD at +0x1c
+ * into eax; 0x403487 stores eax as the multiplier); when row[8] == 0 it is
+ * signum(steer) (0x40348d test; jge/setg: -1 if steer < 0, 1 if steer > 0,
+ * else 0). X = multiplier * steer (0x4034ac imul, sign-extended steer). */
 ski_ent_t *ski_anim_update(ski_ent_t *e, const ski_anim_row_t *row)
 {
-    uint32_t st = (uint32_t)(uint16_t)e->steer;
+    int32_t st = (int32_t)(int16_t)e->steer;
     uint16_t sgn = row->sign;
-    uint32_t step;
+    int32_t step;
     if (e == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0x79f);
     if (row == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0x7a0);
     if (e->frame != row->fidx) ski_assert_fail(SKI_ASSERT_FILE, 0x7a1);
     if (sgn != 0)
-        step = sgn;
+        step = (int32_t)(uint32_t)*(const uint32_t *)((const uint8_t *)e + 0x1c); /* frame | pad word */
+    else if (st < 0)
+        step = -1;
     else
-        step = (st != 0) ? 1 : 0;
-    int32_t s2 = (int32_t)(step * st);
+        step = st > 0 ? 1 : 0;
+    int32_t s2 = step * st;
     int32_t sp = ((int32_t)(int16_t)e->speed > 0) ? (int32_t)(int16_t)e->speed : 0;
     int32_t p = (int32_t)(int16_t)row->win * sp;
     int32_t s3 = (p - (p >> 0x1f)) >> 1; /* floor /2 */
@@ -1809,7 +1839,7 @@ void ski_anim_type10(ski_ent_t *e)
             ski_assert_fail(SKI_ASSERT_FILE, 0x8c8);
         break;
     default:
-        frame = 0x3d;
+        break; /* original keeps the existing frame (unreachable) */
     }
     ski_entity_step(e);
     ski_set_frame(e, frame);
@@ -1984,10 +2014,10 @@ void ski_startpoles_spawn(void)
 
     p = ski_entity_new_col(0x11, 0x35);
     x = (short)(-0x28 - (int16_t)tbl[0x35].width / 2);
-    ski_teleport(p, x, 0, 0);
+    ski_teleport(p, x, g_c5f2, 0); /* pole y-basis = DAT_0040c5f2 (camera Y) */
 
     p = ski_entity_new_col(0x11, 0x36);
-    y = (short)(0 + (int16_t)tbl[0x36].height + 4);
+    y = (short)(g_c5f2 + (int16_t)tbl[0x36].height + 4);
     ski_teleport(p, x, y, 0);
 
     x = ((int16_t)tbl[0x37].width <= (int16_t)tbl[0x38].width) ? (short)tbl[0x38].width
@@ -2032,7 +2062,7 @@ void ski_level_layout(void)
     if (d.x < -0x140)
         d.x = -0x140;
     d.col = 0x3d;
-    d.y = (short)g_c6b0.bottom - (short)g_c5fc - 0x3c; /* original adds width hi16 (never written) */
+    d.y = (short)g_c6b0.bottom - (short)g_c5fc - 0x3c + (short)g_c5f2; /* 0x404bbe: add 0x40c5f2,%ax */
     if (d.y > 0x280)
         d.y = 0x208;
     ski_gate_list_add(&g_c630, &d);
@@ -2047,7 +2077,9 @@ void ski_level_layout(void)
     g_c94c = NULL;
     for (int16_t y = 0x3c0; y < 0x21c0; y += 0x140) {
         d.col = (uint16_t)(0x18 - (uint16_t)b);
-        d.x = (short)((-(uint16_t)b & 0xffa0) - 400);
+        /* 0x404c44: neg/sbb -> 0xffffffff; and $0xa0,%al (8-BIT) -> 0xffffffa0;
+         * add $0xfffffe70 -> 0xfffffe10 = -496 (b=1); b=0 -> -400. */
+        d.x = (short)((b ? 0xffffffa0u : 0u) + 0xfffffe70u);
         b = !b;
         d.y = y;
         ski_gate_desc_t *p = ski_gate_list_add(&g_c630, &d);
@@ -2068,7 +2100,7 @@ void ski_level_layout(void)
     if (d.x > 0x140)
         d.x = 0x140;
     d.col = 0x3e;
-    d.y = (short)g_c6b0.bottom - (short)g_c5fc - 0x3c;
+    d.y = (short)g_c6b0.bottom - (short)g_c5fc - 0x3c + (short)g_c5f2; /* add 0x40c5f2,%ax */
     if (d.y > 0x280)
         d.y = 0x208;
     ski_gate_list_add(&g_c5e0, &d);
@@ -2083,7 +2115,9 @@ void ski_level_layout(void)
     for (int16_t y = 0x410; y < 0x4100; y += 400) {
         d.type = 0xc;
         d.col = (uint16_t)(0x18 - (uint16_t)b);
-        d.x = (short)((-(uint16_t)b & 0xffe0) + 0x1b0);
+        /* 0x404dbd: neg/sbb -> 0xffffffff; and $0xffffffe0 (32-bit);
+         * add $0x1b0 (16-bit) -> 400 (b=1); b=0 -> 432. */
+        d.x = (short)((b ? (short)0xffe0 : 0) + 0x1b0);
         b = !b;
         d.y = y;
         ski_gate_desc_t *p = ski_gate_list_add(&g_c5e0, &d);
@@ -2107,7 +2141,7 @@ void ski_level_layout(void)
     d.type = 0x11;
     d.x = 0;
     d.col = 0x3f;
-    d.y = (short)g_c6b0.bottom - (short)g_c5fc - 0x3c;
+    d.y = (short)g_c6b0.bottom - (short)g_c5fc - 0x3c + (short)g_c5f2; /* add 0x40c5f2,%ax */
     if (d.y > 0x280)
         d.y = 0x208;
     ski_gate_list_add(&g_c658, &d);
@@ -2395,36 +2429,50 @@ void ski_size_hook(short cx, short cy)
     g_c704 = (uint16_t)cx;
 }
 
-/* 0x4065e0 — facing pose 0..6 from the aim vector. Disasm-verified:
- * r = idiv(dy * 4, dx) (floor), then the ladder clamps it. */
-uint32_t ski_aim_facing(short dx, short dy)
+/* 0x4065e0 — facing pose from the aim vector. Disasm-verified:
+ * r = idiv(dy * 4, dx) (truncating); negative ladder is INCLUSIVE
+ * (cmp;jg: return at <=): r<=-12->0, r<=-6->1, r<=-3->2, r<=-1->3;
+ * positive: r>=12->0, r>=6->4, r>=3->5, r>=1->6; dy>0 && dx==0 -> 0
+ * (0x4065e5-0x4065ec); tail (dy<=0 or r==0): dx>=0 -> 6, dx<0 -> 0x103.
+ * 0x103 (259) is an ORIGINAL BUG — an out-of-range frame that flows into
+ * ski_set_frame (soft asserts 0x43d/0x440) and reads the frame-col table at
+ * a1ac + 2*0x103. Reproduced faithfully (strict 1:1 bar). */
+uint32_t ski_aim_facing(short cx, short dx)
 {
     int32_t r;
-    if (dy > 0 && dx != 0) {
-        r = ski_idiv((int32_t)dy << 2, (int32_t)dx);
-        if (r < -12) return 0;
-        if (r < -6) return 1;
-        if (r < -3) return 2;
-        if (r < -1) return 3;
+    /* Decompile param_1 = CX reg, param_2 = DX reg (see ski_game.h).
+     * 0x4065e0: test DX; jle tail; test CX; ==0 -> 0; r = idiv(DX*4, CX). */
+    if (dx > 0) {
+        if (cx == 0)
+            return 0;
+        r = ski_idiv((int32_t)dx << 2, (int32_t)cx);
+        if (r <= -12) return 0;
+        if (r <= -6) return 1;
+        if (r <= -3) return 2;
+        if (r <= -1) return 3;
         if (r >= 12) return 0;
         if (r >= 6) return 4;
         if (r >= 3) return 5;
         if (r >= 1) return 6;
     }
-    return dx >= 0 ? 6 : 5;
+    /* 0x406655: test CX; setge; dec; and $0xfd; add $6 -> CX>=0 -> 6,
+     * CX<0 -> 0x103 (out-of-range frame; original quirk, .rdata col 0). */
+    return cx >= 0 ? 6 : 0x103;
 }
 
 /* 0x406670 — crouch pose 0xd..0x10 from the aim vector. */
-uint32_t ski_aim_crouch(short dx, short dy)
+uint32_t ski_aim_crouch(short cx, short dx)
 {
-    if (dx >= 0) {
-        if (dy < 0)
-            return (uint32_t)((-dx != dy && dx <= -dy) + 15);
-        return (uint32_t)((dy <= dx) + 13);
+    /* 1:1 with the decompile (param_1 = CX reg, param_2 = DX reg); each of
+     * the 4 quadrant paths was re-verified against disasm 0x406670-0x4066c4. */
+    if (cx >= 0) {
+        if (dx < 0)
+            return (uint32_t)((-cx != dx && cx <= -dx) + 15);
+        return (uint32_t)((dx <= cx) + 13);
     }
-    if (dy < 0)
-        return (uint32_t)((((dx <= dy) - 1) & 2) + 14);
-    return (uint32_t)((dx <= -dy) + 13);
+    if (dx < 0)
+        return (uint32_t)((((cx <= dx) - 1) & 2) + 14);
+    return (uint32_t)((cx <= -dx) + 13);
 }
 
 /* --- high-score table ---------------------------------------------------- */

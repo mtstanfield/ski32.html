@@ -278,8 +278,11 @@ void ski_gate_scan(ski_gate_list_t *l); /* 0x4046e0 static lists */
 void ski_gate_list_clear(ski_gate_list_t *l); /* 0x405100 first = NULL */
 ski_gate_desc_t *ski_gate_list_add(ski_gate_list_t *l, const ski_gate_desc_t *d); /* 0x405120 */
 void ski_size_hook(short cx, short cy); /* 0x406060 */
-uint32_t ski_aim_facing(short dx, short dy); /* 0x4065e0 facing frame 0-6 */
-uint32_t ski_aim_crouch(short dx, short dy); /* 0x406670 crouch frame 0xd-0x10 */
+/* Mouse-aim: decompile param_1 = CX reg, param_2 = DX reg (caller 0x406550
+ * sets DX = mouseX - c5fc (window HEIGHT), CX = mouseY - c704 (window WIDTH)
+ * — the original's cross-axis quirk, disasm 0x40658d-0x40659a). */
+uint32_t ski_aim_facing(short cx, short dx); /* 0x4065e0 facing frame 0-6 (+0x103 tail) */
+uint32_t ski_aim_crouch(short cx, short dx); /* 0x406670 crouch frame 0xd-0x10 */
 int ski_rand(void); /* 0x406cda MSVC CRT LCG */
 void ski_rand_seed(uint32_t seed); /* 0x406cd0 */
 
