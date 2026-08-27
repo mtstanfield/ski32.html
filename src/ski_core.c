@@ -886,14 +886,15 @@ int ski_spawn_pick_mid(void)
     if (r < 20) return 0xd;
     if (r < 50) return 0xf;
     if (r < 60) return 0xb;
-    /* 0x402838-0x402840: sbb -> 0xffffffff/0; and $0xfe,%al -> 0xfffffffe/0;
-     * add $0x10 (32-bit) -> 0x10e (r>80) / 0x10 (r<=80). 0x10e is outside
-     * sprite_frame's unsigned switch range (0xb..0x10): the original asserts
-     * 0x623, then 0x57c in entity_new_col, and still creates the entity
-     * (dword type 0x10e, frame 0). Reproduced 1:1; ground-truth 98s run of
-     * the original showed no such assert (see NOTES T11). */
-    if (r <= 80) return 0x10;
-    return 0x10e;
+    /* 0x402838-0x402840: cmp $0x50; sbb %eax,%eax -> CF ? -1 : 0;
+     * and $0xfe,%al -> 0xfffffffe / 0; add $0x10,%eax (32-bit) ->
+     * 0xfffffffe + 0x10 = 0x0000000e. So: r < 80 -> 0x0e, r >= 80 -> 0x10.
+     * (32-bit add wraps the carry out — the 8-bit misread gives 0x10e,
+     * which is NOT in the binary. Both 0x0e and 0x10 are valid types:
+     * sprite_frame 0xe -> 0x2d/0x2e, 0x10 -> 0x34.) */
+    if (r < 80)
+        return 0xe;
+    return 0x10;
 }
 
 /* 0x4025c0 — spawn where the cursor sits; the zone (picker) is chosen by
@@ -2437,15 +2438,16 @@ void ski_size_hook(short cx, short cy)
  * 0x103 (259) is an ORIGINAL BUG — an out-of-range frame that flows into
  * ski_set_frame (soft asserts 0x43d/0x440) and reads the frame-col table at
  * a1ac + 2*0x103. Reproduced faithfully (strict 1:1 bar). */
-uint32_t ski_aim_facing(short cx, short dx)
+uint32_t ski_aim_facing(short dx, short dy)
 {
     int32_t r;
-    /* Decompile param_1 = CX reg, param_2 = DX reg (see ski_game.h).
-     * 0x4065e0: test DX; jle tail; test CX; ==0 -> 0; r = idiv(DX*4, CX). */
-    if (dx > 0) {
-        if (cx == 0)
+    /* Caller 0x406587-0x40659a: dx = mouseX - c704.lo (center X),
+     * dy = mouseY - c5fc.lo (center Y). No axis swap.
+     * 0x4065e0: test dy; jle tail; test dx; ==0 -> 0; r = idiv(dy*4, dx). */
+    if (dy > 0) {
+        if (dx == 0)
             return 0;
-        r = ski_idiv((int32_t)dx << 2, (int32_t)cx);
+        r = ski_idiv((int32_t)dy << 2, (int32_t)dx);
         if (r <= -12) return 0;
         if (r <= -6) return 1;
         if (r <= -3) return 2;
@@ -2455,24 +2457,25 @@ uint32_t ski_aim_facing(short cx, short dx)
         if (r >= 3) return 5;
         if (r >= 1) return 6;
     }
-    /* 0x406655: test CX; setge; dec; and $0xfd; add $6 -> CX>=0 -> 6,
-     * CX<0 -> 0x103 (out-of-range frame; original quirk, .rdata col 0). */
-    return cx >= 0 ? 6 : 0x103;
+    /* 0x406655: test dx; setge; dec; and $0xfd; add $6 -> dx>=0 -> 6,
+     * dx<0 -> 0x103 (out-of-range frame; original quirk; .rdata
+     * ski_frame_col[0x103] = u16 @ 0x40a3b2 = 0x0000). */
+    return dx >= 0 ? 6 : 0x103;
 }
 
-/* 0x406670 — crouch pose 0xd..0x10 from the aim vector. */
-uint32_t ski_aim_crouch(short cx, short dx)
+/* 0x406670 — crouch pose 0xd..0x10 from the aim vector (dx, dy as above). */
+uint32_t ski_aim_crouch(short dx, short dy)
 {
-    /* 1:1 with the decompile (param_1 = CX reg, param_2 = DX reg); each of
-     * the 4 quadrant paths was re-verified against disasm 0x406670-0x4066c4. */
-    if (cx >= 0) {
-        if (dx < 0)
-            return (uint32_t)((-cx != dx && cx <= -dx) + 15);
-        return (uint32_t)((dx <= cx) + 13);
+    /* 1:1 with the decompile; each of the 4 quadrant paths re-verified
+     * against disasm 0x406670-0x4066c4. */
+    if (dx >= 0) {
+        if (dy < 0)
+            return (uint32_t)((-dx != dy && dx <= -dy) + 15);
+        return (uint32_t)((dy <= dx) + 13);
     }
-    if (dx < 0)
-        return (uint32_t)((((cx <= dx) - 1) & 2) + 14);
-    return (uint32_t)((cx <= -dx) + 13);
+    if (dy < 0)
+        return (uint32_t)((((dx <= dy) - 1) & 2) + 14);
+    return (uint32_t)((dx <= -dy) + 13);
 }
 
 /* --- high-score table ---------------------------------------------------- */

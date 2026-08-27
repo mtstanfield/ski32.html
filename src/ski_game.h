@@ -281,8 +281,8 @@ void ski_size_hook(short cx, short cy); /* 0x406060 */
 /* Mouse-aim: decompile param_1 = CX reg, param_2 = DX reg (caller 0x406550
  * sets DX = mouseX - c5fc (window HEIGHT), CX = mouseY - c704 (window WIDTH)
  * — the original's cross-axis quirk, disasm 0x40658d-0x40659a). */
-uint32_t ski_aim_facing(short cx, short dx); /* 0x4065e0 facing frame 0-6 (+0x103 tail) */
-uint32_t ski_aim_crouch(short cx, short dx); /* 0x406670 crouch frame 0xd-0x10 */
+uint32_t ski_aim_facing(short dx, short dy); /* 0x4065e0; dx = mouseX - center X, dy = mouseY - center Y; frames 0-6 (+0x103 tail) */
+uint32_t ski_aim_crouch(short dx, short dy); /* 0x406670; same dx/dy; crouch frames 0xd-0x10 */
 int ski_rand(void); /* 0x406cda MSVC CRT LCG */
 void ski_rand_seed(uint32_t seed); /* 0x406cd0 */
 

@@ -1396,36 +1396,34 @@ on Left, steering works, descent is stable at ~25 ticks/s.
   a490 (6), a4e0 (8) — the original `.rdata` dump matches the transcription
   exactly. Frame-1 row = {accel 1, max 12, decay 1, win 1, sign -1}: the
   idle player's slight left drift is original behavior, not a bug.
-- **pick_mid 0x4027e0 tail is a live assert bug in the original**:
-  `cmp $0x50,%ax; sbb %eax,%eax; and $0xfe,%al; add $0x10,%eax` returns
-  0x10 for r in [60,80] and **0x10E** for r in [81,99] (0xFFFFFFFE + 0x10
-  wraps to 0x0000010E). Spawn 0x402645-0x402663 passes the FULL 32-bit
-  picker result to sprite_frame (unsigned `ja` bound 0xb..0x10 at 0x402853),
-  so 0x10E asserts 0x623, then 0x57c in entity_new_col (type range,
-  0x4026c5), and STILL creates the entity with dword type 0x10E, frame 0.
-  Reproduced 1:1. Ground truth: ~5 min KP_1 straight-descent run of the
-  original on :99 produced no 0x623 dialog (center-zone mid picks with
-  r>80 apparently rare in that run); a review pass had claimed the band
-  returned "0x100e" — the true value is 0x0000010E (same high word).
+- **pick_mid 0x4027e0 tail (controller re-derived 2026-08-27)**:
+  `cmp $0x50,%ax; sbb %eax,%eax; and $0xfe,%al; add $0x10,%eax` — the
+  add is 32-bit: 0xFFFFFFFE + 0x10 = **0x0000000E**. So r in [60,80) ->
+  type **0x0e**, r in [80,99] -> type **0x10** (both valid:
+  sprite_frame 0xe -> 0x2d/0x2e, 0x10 -> 0x34; no assert, no ghost).
+  The earlier "0x10E live assert bug" reading was an 8-bit misread of the
+  32-bit add (0xFE+0x10 = 0x10E) — see the P5 entry below. Untested by
+  smoke: pick_mid requires the player in the center band x ∈ [-0xa0, 0xa0],
+  which keyboard-only left-band runs never enter.
   The pickers' band tables otherwise disasm-verified: pick_speed
   (c6fc<=c748>>6 -> 0xb else 0x12), pick_narrow (r==0 -> 2 else 0xd),
   pick_wide (r<50->0xa, <500->0xd, <700->0xf, <750->0xb, <950->0xe,
   <970->0x10, else 2; the sbb/add $2 tail can only yield 2 since r<1000).
 - **Entity type store is a DWORD**: 0x402109 / 0x4026d9 `mov %edi,0x18(%esi)`
-  — the full 32-bit picker result lands in the +0x18 dword slot (for the
-  0x10E ghost: +0x18=0x0E, +0x19=0x01, +0x1a..+0x1b=0; nothing reads those
-  pad bytes, but the store width is faithful now).
-- **Mouse-aim register mapping (caller 0x406550)**: the original computes
-  `DX = mouseX - c5fc` (window HEIGHT) and `CX = mouseY - c704` (window
-  WIDTH) — a cross-axis quirk (0x40658d/0x406596/0x406598/0x40659a). Both
-  aim functions' decompile param_1 = CX, param_2 = DX (verified per-quadrant
-  against 0x406670-0x4066c4). So `ski_aim_facing(cx, dx)` /
-  `ski_aim_crouch(cx, dx)` take (CX, DX); facing: ladder iff dx>0 && cx!=0,
-  r = idiv(dx*4, cx), tail 0x406655 `test CX; setge; ...; add $6` -> cx>=0
-  -> 6, cx<0 -> 0x103 (out-of-range frame, original quirk; col 0 via the
-  .rdata ski_frame_col table). ski_win.c's caller was passing
-  (x - c704, y - c5fc) — both subtrahends were swapped; fixed to
-  (cx = y - c704, dx = x - c5fc).
+  — the full 32-bit picker result lands in the +0x18 dword slot (e.g.
+  type 0x10 -> +0x18=0x10, +0x19..+0x1b=0; nothing reads those pad bytes,
+  but the store width is faithful now).
+- **Mouse-aim register mapping (caller 0x406550) — CORRECTED 2026-08-27**:
+  disasm 0x406587-0x40659a (controller-verified against raw bytes):
+  `ECX = mouseX (c700) - c704.lo (center X)`, `EDX = mouseY (c70c) -
+  c5fc.lo (center Y)` — plain center-relative coordinates, NO axis swap
+  (an earlier "cross-axis quirk" reading was a misdecode; the T10 caller
+  (x - c704, y - c5fc) was already faithful). `ski_aim_facing(dx, dy)` /
+  `ski_aim_crouch(dx, dy)` take (dx = mouseX - center X, dy = mouseY -
+  center Y); facing: ladder iff dy>0 && dx!=0, r = idiv(dy*4, dx), tail
+  0x406655 `test dx; setge; dec; and $0xfd; add $6` -> dx>=0 -> 6, dx<0 ->
+  0x103 (out-of-range frame, original quirk; ski_frame_col[0x103] =
+  u16 @ 0x40a3b2 = 0x0000 — the 0x000a is at 0x40a3b4, two bytes later).
 
 ### Spec-review fixes (post-commit ef40b3d, 2026-08-27)
 
@@ -1438,11 +1436,18 @@ each item re-verified against disasm/decompile before touching code:
   correct. Left unchanged.
 - **P3 (pick_speed) — verified correct as written** (0x402770:
   `setle(c6fc, c748>>6)`; c6fc <= round -> 0xb else 0x12).
-- **P5 (pick_mid bands) — applied, reviewer value corrected.** First
-  application used the reviewer's "0x100e", which made sprite_frame assert
-  0x623 on every mid spawn with r in [60,80) and froze the smoke test at
-  tick 512. Disasm 0x402838-0x402840 gives 0x10 (r<=80) / 0x10E (r>80) —
-  see the pick_mid entry above; final code returns the faithful 0x10/0x10e.
+- **P5 (pick_mid bands) — applied; FINAL values re-derived by controller
+  from raw bytes 2026-08-27.** Disasm 0x402838-0x402840: cmp $0x50 (80);
+  sbb %eax,%eax -> (r<80) ? 0xffffffff : 0; and $0xfe,%al -> 0xfffffffe/0;
+  add $0x10,%eax (32-BIT) -> 0xfffffffe+0x10 = **0x0000000e**. So the tail
+  is: r < 80 -> **0x0e**, r >= 80 -> **0x10**. Both are valid types
+  (sprite_frame 0xe -> 0x2d/0x2e; 0x10 -> 0x34) — no ghost entity, no
+  assert. The reviewer's "0x100e" (band [60,80)) was an 8-bit misread of
+  the 32-bit add (0xfe+0x10 = 0x10e); the first application of it asserted
+  0x623 and froze the smoke at tick 512; the agent's interim "0x10/0x10e
+  (r<=80 / r>80)" had the bands swapped AND the same 0x10e misread — never
+  exercised in smoke because pick_mid requires the player in the center
+  band x ∈ [-0xa0, 0xa0], which keyboard-only left-band runs never enter.
 - **M1 (collide player-hit) — verified 1:1** with 0x403a00: desc frame=0x32,
   e->steer=0, desc fdelta=0, e->speed=0, desc vx=0, desc timestamp=c698;
   vy (+0x1e) is NOT cleared; assert 0x95c when the group pointer is NULL.
@@ -1453,10 +1458,11 @@ each item re-verified against disasm/decompile before touching code:
   r<=-12/-6/-3/-1 and r>=12/6/3/1); r==0 falls through to the tail (the
   `jl 0x406655` at 0x40664d — no ret-6). The 0x103 tail is an ORIGINAL
   out-of-range-frame quirk, gated on CX<0 (0x406655-0x406663:
-  `test CX; setge; dec; and $0xfd; add $6`); ski_frame_col[0x103] = 0 from
-  the .rdata table. Ghidra's param_1 = CX, param_2 = DX (proven per-quadrant
-  on 0x406670), and the caller 0x406550 cross-swaps the window dimensions —
-  see the mouse-aim entry above.
+  `test dx; setge; dec; and $0xfd; add $6`); ski_frame_col[0x103] =
+  u16 @ 0x40a3b2 = 0x0000 from the .rdata table (a 2-byte-off read gives
+  0x000a at 0x40a3b4). param_1 = mouseX - center X, param_2 = mouseY -
+  center Y — no cross-swap (see corrected mouse-aim entry; the interim
+  "caller axis-swap fix" was reverted by the controller).
 - **AN1 (anim multiplier) — applied.** 0x403467 loads the DWORD at +0x1c
   (frame|pad): multiplier = e->frame when row[8] != 0, else signum(steer)
   (jge/setg: -1 if steer<0, 1 if steer>0, 0 otherwise).
