@@ -31,7 +31,7 @@ extern uint16_t g_c5fc; /* 0x40c5fc window-center y (lo16) */
 extern uint32_t g_c600; /* 0x40c600 pause timestamp (ms) */
 extern uint16_t g_c640; /* 0x40c640 camera x offset (lo16) */
 extern void    *g_c64c; /* 0x40c64c player entity ptr (set by ski_game_start) */
-extern uint16_t g_c5f0, g_c5f2; /* 0x40c5f0 client width (lo16) + hi */
+extern uint16_t g_c5f0, g_c5f2; /* 0x40c5f0 lo16 never written (always 0, full .text scan); hi16 (c5f2) = camera/world Y — zeroed by game_reset (0x4049ae), written by world_shift (0x4024db); y-basis for spawn/gate-view/banner code */
 extern uint32_t g_c610; /* 0x40c610 input-redraw latch */
 extern void    *g_c618; /* 0x40c618 active entity list head */
 extern HBITMAP  g_c614; /* 0x40c614 canvas bitmap (selected in c5ec) */
@@ -148,18 +148,38 @@ _Static_assert(offsetof(ski_ent_t, transition) == 0x4a, "crouch @0x4a");
 _Static_assert(offsetof(ski_ent_t, flags) == 0x4c, "flags @0x4c");
 _Static_assert(sizeof(ski_ent_t) == 80, "entity = 80 bytes");
 
-/* Gate descriptor (36B) in the c758 pool; lists are flat slot ranges
- * [first, end) with a scan cursor. */
+/* Gate descriptor (36B, stride 0x24) in the c758 pool; lists are flat
+ * slot ranges [first, end) with a scan cursor. Offsets raw-verified:
+ * layout stores type at +0x0c via movl ($0x11 @0x404b8f, $0x0c @0x404c28),
+ * frame +0x10 (gate_spawn 0x404187 u32 load), col u16 +0x08
+ * (movw $0x3d @0x404b9b), x +0x14 (0x404c72), y +0x16 (0x404c48),
+ * z +0x18 / vx +0x1a / vy +0x1c (0x404b6d/0x404b68/0x404b63 zero inits),
+ * fdelta +0x1e (mov 0x1e(%esi),%dx @0x4041e3), ts +0x20 (M1 @0x403b77).
+ * Only +0x0a is an unused gap; type/frame are FULL dwords. */
 typedef struct ski_gate_desc {
     ski_ent_t *ent;        /* +0x00 spawned entity (NULL until in view) */
     void      *colptr;     /* +0x04 set by ski_gate_list_add */
     uint16_t   col;        /* +0x08 */
-    uint16_t   type;       /* +0x0c (low word of dword slot) */
-    uint16_t   frame;      /* +0x10 (low word) */
-    int16_t    x, y, z;    /* +0x14, +0x16, +0x18 */
-    int16_t    vx, vy, fdelta; /* +0x1a, +0x1c, +0x1e */
+    uint16_t   _pad_0a;    /* +0x0A unused in the original */
+    uint32_t   type;       /* +0x0C full dword (plain value, e.g. 0xc/0x11) */
+    uint32_t   frame;      /* +0x10 full dword */
+    int16_t    x;          /* +0x14 */
+    int16_t    y;          /* +0x16 */
+    int16_t    z;          /* +0x18 */
+    int16_t    vx;         /* +0x1A */
+    int16_t    vy;         /* +0x1C */
+    int16_t    fdelta;     /* +0x1E */
     uint32_t   timestamp;  /* +0x20 c698 stamp */
-} ski_gate_desc_t; /* 36 bytes */
+} ski_gate_desc_t;
+_Static_assert(sizeof(ski_gate_desc_t) == 36, "gate desc = 36 bytes");
+_Static_assert(offsetof(ski_gate_desc_t, col) == 0x08, "col @0x08");
+_Static_assert(offsetof(ski_gate_desc_t, type) == 0x0c, "type @0x0c");
+_Static_assert(offsetof(ski_gate_desc_t, frame) == 0x10, "frame @0x10");
+_Static_assert(offsetof(ski_gate_desc_t, x) == 0x14, "x @0x14");
+_Static_assert(offsetof(ski_gate_desc_t, vx) == 0x1a, "vx @0x1a");
+_Static_assert(offsetof(ski_gate_desc_t, vy) == 0x1c, "vy @0x1c");
+_Static_assert(offsetof(ski_gate_desc_t, fdelta) == 0x1e, "fdelta @0x1e");
+_Static_assert(offsetof(ski_gate_desc_t, timestamp) == 0x20, "ts @0x20");
 
 typedef struct ski_gate_list {
     ski_gate_desc_t *first; /* +0x00 */
@@ -237,7 +257,7 @@ int ski_rand_range(short n); /* 0x4020b0 rand() % n (low16) */
 ski_ent_t *ski_entity_alloc(int type, uint32_t frame); /* 0x4020d0 entity_new */
 ski_ent_t *ski_set_frame(ski_ent_t *e, uint32_t frame); /* 0x402120 */
 ski_ent_t *ski_entity_set_col(ski_ent_t *e, uint16_t col); /* 0x402180 */
-ski_ent_t *ski_group_split(ski_ent_t *e); /* 0x402220 (was ski_group_head) */
+ski_ent_t *ski_group_split(ski_ent_t *e); /* 0x402220; returns NULL when e is the last in its group */
 ski_ent_t *ski_entity_alloc_copy(ski_ent_t *src, int in_list); /* 0x402280 */
 int ski_frame_special(short col); /* 0x402310 col == 0x1b || col == 0x52 */
 ski_ent_t *ski_entity_from_template(void); /* 0x402330 */
@@ -278,9 +298,10 @@ void ski_gate_scan(ski_gate_list_t *l); /* 0x4046e0 static lists */
 void ski_gate_list_clear(ski_gate_list_t *l); /* 0x405100 first = NULL */
 ski_gate_desc_t *ski_gate_list_add(ski_gate_list_t *l, const ski_gate_desc_t *d); /* 0x405120 */
 void ski_size_hook(short cx, short cy); /* 0x406060 */
-/* Mouse-aim: decompile param_1 = CX reg, param_2 = DX reg (caller 0x406550
- * sets DX = mouseX - c5fc (window HEIGHT), CX = mouseY - c704 (window WIDTH)
- * — the original's cross-axis quirk, disasm 0x40658d-0x40659a). */
+/* Mouse-aim: decompile param_1 = CX reg = mouseX - c704 (window-center X),
+ * param_2 = DX reg = mouseY - c5fc (window-center Y); caller 0x406550 loads
+ * both raw mouse coords first (disasm 0x406587-0x40659a: subtrahends match
+ * axes — no cross-swap). */
 uint32_t ski_aim_facing(short dx, short dy); /* 0x4065e0; dx = mouseX - center X, dy = mouseY - center Y; frames 0-6 (+0x103 tail) */
 uint32_t ski_aim_crouch(short dx, short dy); /* 0x406670; same dx/dy; crouch frames 0xd-0x10 */
 int ski_rand(void); /* 0x406cda MSVC CRT LCG */

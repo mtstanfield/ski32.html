@@ -34,7 +34,9 @@
 #include <stdio.h>
 #include "ski_game.h"
 
+#if SKI_HARNESS
 extern int g_ski_tick; /* defined in ski_core.c (harness counter) */
+#endif
 
 #define ENT16(e, off) (*(const int16_t *)((const char *)(e) + (off)))
 #define ENT16W(e, off) (*(int16_t *)((char *)(e) + (off)))

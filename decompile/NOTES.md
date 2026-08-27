@@ -1408,7 +1408,10 @@ on Left, steering works, descent is stable at ~25 ticks/s.
   The pickers' band tables otherwise disasm-verified: pick_speed
   (c6fc<=c748>>6 -> 0xb else 0x12), pick_narrow (r==0 -> 2 else 0xd),
   pick_wide (r<50->0xa, <500->0xd, <700->0xf, <750->0xb, <950->0xe,
-  <970->0x10, else 2; the sbb/add $2 tail can only yield 2 since r<1000).
+  <970->0x10, then the tail 0x402760-0x402769 `cmp $0x3de; sbb %eax,%eax;
+  add $2` — r in [970,990) -> 1, r in [990,999] -> 2 (32-bit, disasm
+  re-verified 2026-08-27; the "can only yield 2 since r<1000" line was
+  wrong — the code was right: `return 2 - (r < 0x3de)`).
 - **Entity type store is a DWORD**: 0x402109 / 0x4026d9 `mov %edi,0x18(%esi)`
   — the full 32-bit picker result lands in the +0x18 dword slot (e.g.
   type 0x10 -> +0x18=0x10, +0x19..+0x1b=0; nothing reads those pad bytes,
@@ -1448,9 +1451,14 @@ each item re-verified against disasm/decompile before touching code:
   (r<=80 / r>80)" had the bands swapped AND the same 0x10e misread — never
   exercised in smoke because pick_mid requires the player in the center
   band x ∈ [-0xa0, 0xa0], which keyboard-only left-band runs never enter.
-- **M1 (collide player-hit) — verified 1:1** with 0x403a00: desc frame=0x32,
-  e->steer=0, desc fdelta=0, e->speed=0, desc vx=0, desc timestamp=c698;
-  vy (+0x1e) is NOT cleared; assert 0x95c when the group pointer is NULL.
+- **M1 (collide player-hit) — verified 1:1** with 0x403a00 (re-dumped
+  0x403b50-0x403b86, 2026-08-27): desc frame=0x32 (u32 @+0x10, 0x403b5b),
+  e->steer=0 (+0x46, 0x403b61), desc **vx**=0 (+0x1a, 0x403b65),
+  e->speed=0 (+0x48, 0x403b6c), desc **vy**=0 (+0x1c, 0x403b70),
+  desc timestamp=c698 (u32 @+0x20, 0x403b77); **fdelta (+0x1e) is NOT
+  cleared** (the earlier "fdelta=0, vx=0; vy not touched" reading was a
+  field-name rotation under the pre-36B struct — see the gate-struct
+  entry below). assert 0x95c when the group pointer is NULL.
 - **IDIV1 — ski_idiv is C `/` (truncate-toward-zero)**, matching x86 idiv;
   the earlier "floor" interpretation was wrong.
 - **AIM1 — applied + register-mapping corrected this turn.** Ladder
@@ -1479,6 +1487,64 @@ each item re-verified against disasm/decompile before touching code:
 - **N2 — anim type10 default** keeps the existing frame (no 0x3d write).
 - **N1 — SKIPPED**: 0x27 vs 0x2a stack-residue difference verified
   behaviorally neutral (register spill, no observable effect).
+
+### Controller re-verification + code-quality fixes (2026-08-27)
+
+Controller re-adjudicated every edee932/e67e404 claim against raw disasm,
+then applied the code-quality review findings. Disposition:
+
+- **P1 spawn zone — agent's rejection CONFIRMED.** 0x4025dd/0x4025e3:
+  `cmp $0xfdc0; jl` / `cmp $0xfec0; jg` → x ∈ [−0x240, −0x140]
+  (0xFDC0 = −576 = −0x240; 0xFEC0 = −320 = −0x140). The reviewer's
+  claimed [−0x3c0,−0x1c0] was an arithmetic error on the same bytes; the
+  code (−0x240/−0x140) was correct all along.
+- **e67e404 aim revert — CONFIRMED.** 0x406587-0x40659a: ECX = mouseX −
+  c704.lo (center X), EDX = mouseY − c5fc.lo (center Y); size hook
+  0x406097/0x40609f writes c5fc = height/2, c704 = width/2. No cross-swap;
+  the interim swap was reverted.
+- **e67e404 pick_mid tail — CONFIRMED.** 0x402838-0x402841 `add $0x10,%eax`
+  is 32-bit: 0xFFFFFFFE + 0x10 → 0x0000000E. r ∈ [60,80) → 0x0e,
+  r ∈ [80,99] → 0x10 (both valid types; no ghost/assert).
+- **e67e404 frame-col — CONFIRMED.** Table base 0x40a1ac (NOT 0x40a1a4 —
+  adjacent to the dead "button" class string); 264 u16 entries, indices
+  0..0x107 (263). col[259] = u16 @ 0x40a3b2 = 0x0000; col[260] @ 0x40a3b4
+  = 0x000a. Table tail byte-exact vs the C array.
+- **Gate descriptor is a 36-byte struct (stride 0x24)** — compile-verified
+  the prior C struct laid out to 32B (implicit pad before the u32
+  timestamp), so every `memcpy(slot, d, 36)` over-read 4 bytes. Raw
+  evidence: type is a FULL dword at +0x0c (movl $0x11 @0x404b8f,
+  movl $0x0c @0x404c28, both `0x1c(%esp)` with desc base esp+0x10);
+  frame u32 @+0x10 (gate_spawn 0x404187); col u16 @+0x08 (movw $0x3d
+  @0x404b9b); x @+0x14, y @+0x16, z @+0x18, vx @+0x1a, vy @+0x1c
+  (zero inits 0x404b5e-0x404b6d store fdelta/vy/vx/z in that order);
+  fdelta @+0x1e (mov 0x1e(%esi),%dx @0x4041e3); timestamp @+0x20
+  (0x403b77). Only +0x0a is a genuine gap. Struct rewritten with
+  _pad_0a + u32 type/frame and offsetof asserts; all stride arithmetic
+  now `sizeof(ski_gate_desc_t)` (9 sites incl. the g_c6f8 pool walk and
+  the memcpy).
+- **M1 zeroing corrected** (see M1 entry above): 0x403b65/0x403b70 clear
+  desc vx (+0x1a) and vy (+0x1c); fdelta untouched.
+- **c5f0/c5f2 semantics fixed**: c5f0.lo16 is NEVER written (full .text
+  scan: only the 2 dword-loads at 0x40255e/0x40453f touch the slot,
+  never a store); c5f2 = camera/world Y (written by world_shift
+  0x4024db, zeroed by game_reset 0x4049ae `mov %si(=0),0x40c5f2`;
+  y-basis for startpoles, gate view bands, banner clamp). Header +
+  startpoles comments corrected. Gate code reading c5fc (window-center Y)
+  as the static view reference alongside c5f2 is FAITHFUL — 0x4040a0
+  loads both (`mov 0x40c5fc,%eax` … `sub 0x40c5f2,%ax`).
+- **g_ski_tick** definition/increment/extern now `#if SKI_HARNESS`-guarded
+  (was a production leak; usage in ski_dbg_* and the wproc trace was
+  already guarded).
+- **Comments**: frame-col range 0..0x105 → 0..0x107; aim header block
+  reworded to the verified (dx,dy) semantics; group_split comment.
+- **level_layout re-verified store-by-store** against 0x404b50-0x4050ac
+  (banner: type/col/x/y/z/fdelta/vy/vx; cruise: type/col/fdelta/vx/z=0x20/
+  y + per-branch frame/x/vy; final four: type 7/8 (0x40505a/0x40509d,
+  frame 0x2a carried), 5 (0x4050ba), 6 (0x4050dc)): C field sets match. Static-list descs have frame/timestamp left as
+  stack garbage in the original; the C `d = {0}` zero-init is a safe
+  determinism choice because static lists only ever go through
+  ski_gate_update (entity_new_col — never reads d->frame) and never
+  ski_gate_step (type 4/5..8 only, cruise list).
 
 ### Timing (c5f4)
 

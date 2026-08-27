@@ -96,7 +96,9 @@ ski_sound_t ski_sound_7; /* @0x40c6f0 (resource id 9) */
 ski_sound_t ski_sound_8; /* @0x40c6e0 (resource id 7) */
 ski_sound_t ski_sound_9; /* @0x40c608 (resource id 8) */
 
+#if SKI_HARNESS
 int g_ski_tick = 0; /* harness counter: ski_tick() increments it (see ski_game.h) */
+#endif
 
 /* ================= T10 leaves ================= */
 
@@ -414,7 +416,7 @@ void ski_snd_play(ski_sound_t *p)
 
 /* --- .rdata tables (dumped from the PE, verified against the disasm) --- */
 
-/* a1ac: frame -> sprite column, 264 x u16 (frames 0..0x105), extracted
+/* a1ac: frame -> sprite column, 264 x u16 (frames 0..0x107 = 263), extracted
  * byte-for-byte from the original .rdata (file offset 0xa1ac, 528B). The
  * original indexes it as *(u16*)(0x40a1ac + 2*frame) with NO bounds check,
  * so out-of-range frames (e.g. the 0x103 aim tail) read the same garbage
@@ -1206,7 +1208,7 @@ void ski_gate_list_update(ski_gate_list_t *l)
     int16_t top = (int16_t)g_c68c;
     int16_t bot = (int16_t)g_c684;
     ski_gate_desc_t *end = l->end;
-    for (; d < end; d = (ski_gate_desc_t *)((char *)d + 0x24)) {
+    for (; d < end; d = (ski_gate_desc_t *)((char *)d + sizeof(ski_gate_desc_t))) {
         ski_gate_step(d);
         int16_t dy = (int16_t)((int16_t)d->y - (int16_t)g_c5f2);
         int16_t lo = (int16_t)((top - view) - 0x3c);
@@ -1232,7 +1234,7 @@ void ski_gate_scan(ski_gate_list_t *l)
             int16_t dy = (int16_t)((int16_t)cur->y - (int16_t)g_c5f2);
             if ((int32_t)low <= (int32_t)dy)
                 break;
-            cur = (ski_gate_desc_t *)((char *)cur + 0x24);
+            cur = (ski_gate_desc_t *)((char *)cur + sizeof(ski_gate_desc_t));
         } while (cur < end);
     }
     if (l->first < cur) {
@@ -1240,7 +1242,7 @@ void ski_gate_scan(ski_gate_list_t *l)
             int16_t dy = (int16_t)((int16_t)cur->y - (int16_t)g_c5f2);
             if ((int32_t)dy < (int32_t)low)
                 break;
-            cur = (ski_gate_desc_t *)((char *)cur - 0x24);
+            cur = (ski_gate_desc_t *)((char *)cur - sizeof(ski_gate_desc_t));
         } while (l->first < cur);
     }
     l->cursor = cur;
@@ -1250,7 +1252,7 @@ void ski_gate_scan(ski_gate_list_t *l)
             int16_t high = (int16_t)((top - view) + 0x3c);
             if ((int32_t)high <= (int32_t)dy)
                 return;
-            ski_gate_desc_t *next = (ski_gate_desc_t *)((char *)cur + 0x24);
+            ski_gate_desc_t *next = (ski_gate_desc_t *)((char *)cur + sizeof(ski_gate_desc_t));
             ski_gate_update(cur);
             cur = next;
         } while (cur < l->end);
@@ -1267,7 +1269,7 @@ void ski_gate_list_clear(ski_gate_list_t *l)
 ski_gate_desc_t *ski_gate_list_add(ski_gate_list_t *l, const ski_gate_desc_t *d)
 {
     uint32_t idx = g_c702++;
-    ski_gate_desc_t *slot = (ski_gate_desc_t *)((char *)g_c758 + idx * 0x24);
+    ski_gate_desc_t *slot = (ski_gate_desc_t *)((char *)g_c758 + idx * sizeof(ski_gate_desc_t));
     if (l == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0xa1b);
     if (d == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0xa1c);
     if (g_c702 > 0x100) ski_assert_fail(SKI_ASSERT_FILE, 0xa1d);
@@ -1278,8 +1280,8 @@ ski_gate_desc_t *ski_gate_list_add(ski_gate_list_t *l, const ski_gate_desc_t *d)
     }
     if (l->end != slot)
         ski_assert_fail(SKI_ASSERT_FILE, 0xa20);
-    l->end = (ski_gate_desc_t *)((char *)l->end + 0x24);
-    memcpy(slot, d, 36);
+    l->end = (ski_gate_desc_t *)((char *)l->end + sizeof(ski_gate_desc_t));
+    memcpy(slot, d, sizeof *slot);
     slot->ent = NULL;
     slot->colptr = (char *)g_c5f8 + (uint32_t)slot->col * 0x10;
     return slot;
@@ -1488,9 +1490,9 @@ ski_ent_t *ski_collide(ski_ent_t *e1, ski_ent_t *e2)
             ski_gate_desc_t *d = (ski_gate_desc_t *)e1->desc;
             d->frame = 0x32;
             e1->steer = 0;
-            d->fdelta = 0; /* +0x1a */
+            d->vx = 0; /* +0x1a (0x403b65 mov %bx,0x1a(%edx)) */
             e1->speed = 0;
-            d->vx = 0; /* +0x1c; vy (+0x1e) is NOT touched */
+            d->vy = 0; /* +0x1c (0x403b70 mov %bx,0x1c(%eax)); fdelta NOT touched */
             d->timestamp = g_c698;
             return ski_set_frame(e1, 0x32);
         }
@@ -1577,7 +1579,7 @@ void ski_style_ss(ski_ent_t *e, short x_prev, short y_prev)
                 g_c948 = (uint32_t)((int32_t)g_c948 - 5000);
             }
             ski_gate_set_col(g, col);
-            g_c6f8 = (void *)((char *)g_c6f8 + 0x24);
+            g_c6f8 = (void *)((char *)g_c6f8 + sizeof(ski_gate_desc_t));
             return;
         }
     }
@@ -1654,7 +1656,7 @@ void ski_style_gs(ski_ent_t *e, short x_prev, short y_prev)
                 g_c948 = (uint32_t)((int32_t)g_c948 - 5000);
             }
             ski_gate_set_col(g, col);
-            g_c6f8 = (void *)((char *)g_c6f8 + 0x24);
+            g_c6f8 = (void *)((char *)g_c6f8 + sizeof(ski_gate_desc_t));
             return;
         }
     }
@@ -2006,7 +2008,8 @@ void ski_level_init(void)
 }
 
 /* 0x4051e0 — the four start poles, sized from the column table.
- * (c5f0's high word is never written: always 0.) */
+ * g_c5f2 (camera Y) is 0 here: game_reset zeroed it (0x4049ae) and no tick
+ * has run yet, so the poles anchor at world y = 0. */
 void ski_startpoles_spawn(void)
 {
     const ski_col_entry_t *tbl = (const ski_col_entry_t *)g_c5f8;
@@ -2398,8 +2401,8 @@ void ski_tick(void)
     ski_dbg_phase(7);
 #endif
 
-    g_ski_tick++;
 #if SKI_HARNESS
+    g_ski_tick++;
     /* Harness liveness probe (T13 builds): dump the tick counter to a
      * known file once per second (25 ticks at the 40 ms period). */
     if ((g_ski_tick & 0x1f) == 0) {
