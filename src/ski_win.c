@@ -454,8 +454,12 @@ static void wm_size_main(HWND h)
 {
     g_c760 = 0;
     GetClientRect(h, &g_c6b0);
+    /* 0x405fa0-0x405feb: param1 = (left+right)/2 -> c704 (center X);
+     * param2 = (top+bottom)/3 (0x405fcc imul 0x55555556 high part) ->
+     * c5fc (vertical anchor, 1/3 down, NOT the center). T12 render
+     * exposed the old /2: scene shifted ~123px down vs the original. */
     ski_size_hook((short)((g_c6b0.right + g_c6b0.left) / 2),
-                  (short)((g_c6b0.bottom + g_c6b0.top) / 2)); /* 0x406060 */
+                  (short)((g_c6b0.bottom + g_c6b0.top) / 3)); /* 0x406060 */
     g_c684 = g_c6b0.top - 0x78;
     g_c6d8 = (uint16_t)(g_c6b0.bottom - g_c6b0.top);
     g_c688 = g_c6b0.right + 0x78;

@@ -1575,3 +1575,115 @@ faithful GetTickCount difference is transcribed.
   (Return) and pressing F2 restarts: full state reset observed
   (cam_y=0, c5d8=0, c714=0, player x=0 y=0 fr=3 steer=0 speed=0) with ticks
   resuming at ~25/s.
+
+## T12 notes — render/status reconstructed (2026-08-27)
+
+Five functions transcribed from the decompiled C and verified line-by-line
+against the disasm: `ski_render` (0x401060), `draw_entity` (0x401540,
+static), `ski_offscreen_resize` (0x401970), `ski_paint_scene` (0x401b80),
+`ski_status_draw_values` (0x406100). All build clean (both targets, -Wall).
+
+### Transcription bugs found + fixed this session (objdump evidence)
+
+- **0x4ec assert inversion (ski_group_merge).** Disasm 0x401ad9-0x401aea
+  `test [esi+0x4c],0x10; je over-assert` -> the assert fires when a chain
+  node STILL has 0x10 (a live group head), i.e. merging would graft a group
+  onto a group. T11 had it inverted (`== 0`); corrected to `!= 0`.
+- **Pass 1 partner bit = 1, NOT 2.** Disasm 0x401106-0x401110
+  `and eax,0xfffffffe` clears bit 0 (flag 1) of the partner, not flag 2.
+  Clearing flag 2 instead left the split copy in-list so it was re-split by
+  world_shift every tick (exponential pool growth, assert 0x359 ~13 ticks in).
+- **Pass 2 dead branch clears flag 8, NOT 0x10.** Disasm 0x40112e-0x401137
+  `test al,8; and al,0xef` (on the DEAD branch) clears bit 3 (flag 8, dead)
+  and revives the entity as a ghost; 0x10 untouched.
+- **Pass 2 alive-branch flag math (sticky 0x10) + reset condition.** Disasm
+  0x401154-0x401162: new flags = `(vis ? 0x10 : 0) | (old & ~8)` (0x10 is
+  STICKY — survives invisible frames); the bbox/gnext=NULL reset runs when
+  the NEW flags carry 0x10 (visible OR already sticky), per
+  `test bl,al` (bl=0x10). Not on `vis` alone.
+- **Merge clears 0x10 on the member b, not flag 8.** Disasm 0x401b07-0x401b0d
+  `and al,0xef`; 0xef = 1110_1111 clears ONLY bit 4 (0x10). The merged
+  member loses head status (drawn via the head's gnext chain); flags 1/2/4/8
+  kept. (An earlier mis-derivation had this the other way; corrected +
+  comment rewritten.)
+- **T10 size_hook /2-vs-/3 (legit cross-layer fix, src/ski_win.c).** The
+  caller (0x405fc0) computes param2 = (top+bottom)/3 via `imul 0x55555556`
+  high-part idiom (0x405fcc) -> c5fc (1/3-down anchor, NOT center); param1 =
+  (left+right)/2 -> c704. RECT is {left=c6b0, top=c6b4, right=c6b8,
+  bottom=c6bc}. Observed c5fc = 244 for a 734px window (734/3 = 244) confirms
+  /3. NOTE: the T11 controller note "size hook writes c5fc = height/2" is
+  WRONG — it conflated the hook (which just stores the caller's params) with
+  the caller's /3. The aim quirk (cx = mouseY - c5fc, dx = mouseX - c704) is
+  separate and unchanged.
+
+### Faithful quirks transcribed 1:1 (not bugs)
+
+- **draw_entity Path A final composite** loads its HDC/x/y from unwritten
+  local slots (garbage HDC = the saved bbox[1]); the decompiled C composites
+  the canvas at (x1,y1) into param_1. Reproduced the on-screen behavior
+  (scene visible at the group bbox) via the decompiled C; raw-bytes slots
+  left as TODO(T12-verify) markers.
+- **First-draw blit** width arg = the head entity pointer (decompiled-C
+  quirk); TODO(T12-verify).
+- **4 unguarded gnext walks** (draw_entity: initial pick-walk, OOM path-B
+  walk, main do-while inner walk; ski_group_merge: tail walk). The original
+  has no cycle guard in any of them.
+
+### The gnext-cycle hang (OPEN — a T11 consequence, not a T12 bug)
+
+During sustained descent my build spins (45% CPU, R state, no assert dialog)
+in one of the unguarded gnext walks when the group chains form a CYCLE.
+Root-cause trace (in-binary SKI_HARNESS dumps, since removed) showed the
+cycle forms from a stale gnext on a fresh split copy (pass 2 does not reset
+it because the copy lacked 0x10 at pass-2 time) + merge grafting + the
+per-tick mass splitting of `ski_world_shift` (every in-list rect-cached
+non-group entity splits each tick the player moves; ~22 splits/tick + the
+player split).
+
+**Why the original never hangs:** a same-seed differential test (original
+patched to seed 0x123456 at file offset 0x4971) shows the original's skier
+CRASHES into a tree at Dist 140m / Speed 0 and stops — a crashed skier stops
+world_shift, so splits stop, so the chains stabilize and no cycle forms. The
+original runs clean 3+ min. My skier does NOT crash at 140m (it descends to
+~309m still at Speed 18, then hangs) — a genuine **T11 physics/collision
+divergence** (screen-space rect history). That divergence is out of T12's
+scope; the render code itself is line-by-line faithful.
+
+**Recommendation to Main:** (a) preferred — a T11 fix so the skier crashes
+like the original (no hang, like the original); or (b) a clearly-marked
+defensive cycle guard (max-hops) in the 4 unguarded walks — a robustness
+deviation the original does not have; it would not change any state the
+original reaches (the original's skier crashes first) but needs sign-off.
+NOT added (fidelity bar; needs approval).
+
+### Mid picker resolved (the "type-6 contradiction" was a phantom)
+
+FUN_004027e0 (center band) = speed gate `(c748>>5) < c6fc -> 0x12`, then
+`rand_range(100)` with 6 branches: r<2->0xa, <20->0xd, <50->0xf, <60->0xb,
+<80->**0x0e (14)**, else 0x10. The tail `cmp ax,0x50; sbb eax,eax;
+and al,0xfe; add eax,0x10` wraps 32-bit: 0xFFFFFFFE + 0x10 = **0x0000000E
+(14)**, NOT 6 (an earlier read mis-computed it as 6, a type that WOULD hit
+the 0x91f activate assert). 0x0e/14 is >= 0xb so it routes through
+ski_entity_new_col (random col), not activate — no assert. The code already
+returned 0xe (14); only the comment was wrong (now fixed). Matches the T11
+controller's objdump adjudication. Wide (0x4026f0), speed (0x402770),
+narrow (0x4027a0) pickers re-confirmed faithful.
+
+### Smoke (harness build, Xvfb :99, SKI_DETERMINISTIC+SKI_HARNESS)
+
+- KP_1 starts the descent; scene RENDERS correctly: skier near top-center,
+  three "Start" banners, Free-style/Tree-Slalom mode banners, trees/gates
+  descending, status panel Dist 35m / Speed 18m/s (Time 0:00:00.00 and
+  Style 0 correct pre-slalom — c944 is the style-section timer only).
+  Captured in `evidence/m2-render.png`.
+- **No asserts** (no 0x91f/0x359/0x4ec) — the picker values are correct.
+- **Hang at tick ~608** (Dist ~35m, variable per run: 2.4s–28s post-KP_1)
+  — the gnext-cycle busy-spin above. Blocks the message loop, so F2 does not
+  resume while hung.
+
+### TEMP trace code
+
+All `ski_dbg_*` trace functions, call sites, and the `<stdarg.h>` include
+added for T12 debugging were removed before commit. Only the permanent
+`g_ski_tick` tick-dump probe (ski_tick) and the wproc trace (ski_win.c)
+remain under `#if SKI_HARNESS`.

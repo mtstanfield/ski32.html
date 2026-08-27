@@ -690,15 +690,24 @@ void ski_group_merge(ski_ent_t *a, ski_ent_t *b)
     if ((a->flags & 0x10) == 0) ski_assert_fail(SKI_ASSERT_FILE, 0x4e6);
     if ((b->flags & 0x10) == 0) ski_assert_fail(SKI_ASSERT_FILE, 0x4e7);
     if (a == b) ski_assert_fail(SKI_ASSERT_FILE, 0x4e8);
+    /* a's existing chain must hold absorbed members only (0x10 cleared at
+     * merge time). Disasm 0x401ad9-0x401aea: test [esi+0x4c],0x10; je over
+     * the assert -> 0x4ec fires when a chain node STILL has 0x10 (a live
+     * group head), i.e. merging would graft one group onto another. */
     ski_ent_t *last = a;
     while (last->gnext != NULL) {
-        if ((last->gnext->flags & 0x10) == 0)
+        if ((last->gnext->flags & 0x10) != 0)
             ski_assert_fail(SKI_ASSERT_FILE, 0x4ec);
         last = last->gnext;
     }
     last->gnext = b;
     ski_bbox_expand(a->bbox, b->bbox);
-    b->flags &= ~0x10u;
+    /* Disasm 0x401b07-0x401b0d: `mov eax,[ebp+0x4c]; and al,0xef; store`.
+     * 0xef = 1110_1111 clears ONLY bit 4 (0x10) from b, keeping flags
+     * 1/2/4/8. The merged member b loses head status (0x10): pass 4 draws
+     * only 0x10 entities and walks their gnext chains, so b is rendered via
+     * a's chain, not as an independent head. Flag 8 (dead) is preserved. */
+    b->flags &= 0xefu;
 }
 
 /* 0x401350 */
@@ -888,12 +897,15 @@ int ski_spawn_pick_mid(void)
     if (r < 20) return 0xd;
     if (r < 50) return 0xf;
     if (r < 60) return 0xb;
-    /* 0x402838-0x402840: cmp $0x50; sbb %eax,%eax -> CF ? -1 : 0;
-     * and $0xfe,%al -> 0xfffffffe / 0; add $0x10,%eax (32-bit) ->
-     * 0xfffffffe + 0x10 = 0x0000000e. So: r < 80 -> 0x0e, r >= 80 -> 0x10.
-     * (32-bit add wraps the carry out — the 8-bit misread gives 0x10e,
-     * which is NOT in the binary. Both 0x0e and 0x10 are valid types:
-     * sprite_frame 0xe -> 0x2d/0x2e, 0x10 -> 0x34.) */
+    /* 0x402838-0x402843: cmp ax,0x50; sbb eax,eax; and al,0xfe; add
+     * eax,0x10. sbb makes eax = (r<80) ? 0xFFFFFFFF : 0; and al,0xfe ->
+     * 0xFFFFFFFE (r<80) or 0; add 0x10 wraps the 32-bit value:
+     * 0xFFFFFFFE + 0x10 = 0x0000000E (14) for r<80, else 0x10 (16). Both
+     * are >= 0xb, so ski_spawn routes them through ski_entity_new_col
+     * (random col via sprite_frame), NOT ski_entity_activate — no 0x91f
+     * assert. (An earlier read mis-computed the wrap as 6, a type that
+     * WOULD assert; 0x0e/14 is the correct value, matching the T11
+     * controller's objdump adjudication.) */
     if (r < 80)
         return 0xe;
     return 0x10;
@@ -2212,85 +2224,10 @@ void ski_level_layout(void)
 
 /* --- per-tick update ----------------------------------------------------- */
 
-#if SKI_HARNESS
-/* Hang diagnostics: /tmp/ski_phase = last phase reached in the in-flight
- * tick (1 physics entry, 2 after pass 1, 3 after gates+reap, 4
- * pre-collision, 5 post-collision, 6 physics exit, 7 tick exit);
- * /tmp/ski_state = entity + gate state at physics entry. */
-static void ski_dbg_phase(int p)
-{
-    static FILE *fp;
-    if (!fp)
-        fp = fopen("/tmp/ski_phase", "w");
-    if (fp) {
-        fprintf(fp, "%d tick=%u\n", p, g_ski_tick);
-        fflush(fp);
-    }
-}
-
-static void ski_dbg_state(void)
-{
-    static FILE *fs;
-    if (!fs)
-        fs = fopen("/tmp/ski_state", "w");
-    if (!fs)
-        return;
-    fprintf(fs, "tick=%u cam_y=%u view=%u area=%u desc_n=%u c5d8=%d c714=%d c72c=%p\n",
-            g_ski_tick, g_c5f2, g_c5fc, g_c6fc, g_c702, (int)(int16_t)g_c5d8,
-            (int)(int16_t)g_c714, (void *)g_c72c);
-    int n = 0;
-    for (const ski_ent_t *e = (const ski_ent_t *)g_c618; e != NULL && n < 500;
-         e = e->next) {
-        fprintf(fs,
-                "e %08lx next=%08lx part=%08lx desc=%08lx type=%u fr=%u "
-                "x=%d y=%d mode=%u steer=%d speed=%d fl=%x\n",
-                (unsigned long)(uintptr_t)e, (unsigned long)(uintptr_t)e->next,
-                (unsigned long)(uintptr_t)e->partner,
-                (unsigned long)(uintptr_t)e->desc, e->type, e->frame, e->x,
-                e->y, e->mode, e->steer, e->speed, e->flags);
-        if (e == (const ski_ent_t *)g_c72c) {
-            const unsigned char *b = (const unsigned char *)e;
-            fprintf(fs, "RAW ");
-            for (int k = 0x18; k < 0x28; k++)
-                fprintf(fs, "%02x", b[k]);
-            fprintf(fs, "\n");
-        }
-        n++;
-    }
-    if (n >= 500)
-        fprintf(fs, "CYCLE (>=500 nodes)\n");
-    fprintf(fs, "free=%08lx\n", (unsigned long)(uintptr_t)g_c744);
-    {
-        const char *nm[5] = { "c630", "c5e0", "c658", "c738", "c720" };
-        const ski_gate_list_t *ls[5] = {
-            &g_c630, &g_c5e0, &g_c658, &g_c738, &g_c720
-        };
-        for (int i = 0; i < 5; i++)
-            fprintf(fs, "%s first=%08lx end=%08lx cur=%08lx\n", nm[i],
-                    (unsigned long)(uintptr_t)ls[i]->first,
-                    (unsigned long)(uintptr_t)ls[i]->end,
-                    (unsigned long)(uintptr_t)ls[i]->cursor);
-        int i = 0;
-        for (const ski_gate_desc_t *d = g_c720.first; d < g_c720.end && i < 8;
-             d++, i++)
-            fprintf(fs, "c720[%d] %08lx ent=%08lx type=%u fr=%u x=%d y=%d "
-                        "vx=%d vy=%d\n",
-                    i, (unsigned long)(uintptr_t)d,
-                    (unsigned long)(uintptr_t)d->ent, d->type, d->frame,
-                    d->x, d->y, d->vx, d->vy);
-    }
-    fflush(fs);
-}
-#endif
-
 /* 0x401e50 — physics pass. c5d8/c714 arithmetic is 16-bit throughout
  * (movw/addw; u16 stores zero the high word), reproduced with u16 wraps. */
 void ski_game_physics(void)
 {
-#if SKI_HARNESS
-    ski_dbg_state();
-    ski_dbg_phase(1);
-#endif
     g_c714 = (uint32_t)(uint16_t)((uint16_t)g_c714 - (uint16_t)g_c640);
     g_c5d8 = (uint32_t)(uint16_t)((uint16_t)g_c5d8 - (uint16_t)g_c5f2);
 
@@ -2310,23 +2247,14 @@ void ski_game_physics(void)
             }
         }
     }
-    #if SKI_HARNESS
-    ski_dbg_phase(2);
-    #endif
     ski_gate_scan(&g_c630);
     ski_gate_scan(&g_c5e0);
     ski_gate_scan(&g_c658);
     ski_gate_scan(&g_c738);
     ski_gate_list_update(&g_c720);
     ski_entity_reap();
-    #if SKI_HARNESS
-    ski_dbg_phase(3);
-    #endif
 
     /* pass 2: pairwise collisions (each unordered pair once) */
-    #if SKI_HARNESS
-    ski_dbg_phase(4);
-    #endif
     for (ski_ent_t *e = (ski_ent_t *)g_c618; e != NULL; e = e->next) {
         if (e->flags & 2)
             continue;
@@ -2346,9 +2274,6 @@ void ski_game_physics(void)
             }
         }
     }
-    #if SKI_HARNESS
-    ski_dbg_phase(5);
-    #endif
 
     /* restore spawn cursors, then fill the spawn bands */
     g_c5d8 = (uint32_t)(uint16_t)((uint16_t)g_c5d8 + (uint16_t)g_c5f2);
@@ -2373,9 +2298,6 @@ void ski_game_physics(void)
         ski_ent_t *e = ski_entity_alloc(3, 0x1f);
         ski_spawn_dir(e, 2);
     }
-#if SKI_HARNESS
-    ski_dbg_phase(6);
-#endif
 }
 
 /* 0x401000 — one fixed-step tick (40 ms timer callback). */
@@ -2397,9 +2319,6 @@ void ski_tick(void)
     g_c610 = 1;
     if (g_c698 - g_c5dc > 0x147)
         ski_status_draw_values(g_c6cc);
-#if SKI_HARNESS
-    ski_dbg_phase(7);
-#endif
 
 #if SKI_HARNESS
     g_ski_tick++;
@@ -2581,28 +2500,356 @@ serialize:
     MessageBoxA(g_c6c8, buf, ski_str_cache(STR_HIGHSCORE), 0);
 }
 
-/* ================= T12 render/status (stubs) ================= */
+/* ================= T12 render/status =================
+ * 1:1 transcription of decompile/ghidra (logic), disassembly as authority
+ * on offsets/widths. The canvas is the g_c5ec DC (bitmap g_c614, sized by
+ * ski_offscreen_resize); per-best sprite blits go to the canvas, one
+ * canvas->window blit composites the group.
+ */
 
-/* 0x401060 — scene render into the main DC. */
+/* 0x401970 — grow-only canvas reallocation. Sizes are (dim & 0xffc0) + 0x40
+ * (round down to 64, plus 64 headroom); on OOM retry once at the exact
+ * requested size, else give up (c690 = c6e8 = 0) and return 0. */
+static uint32_t ski_offscreen_resize(uint16_t w, uint16_t h)
+{
+    if ((int16_t)g_c690 < (int16_t)w || (int16_t)g_c6e8 < (int16_t)h) {
+        g_c690 = (uint16_t)(((unsigned)w & 0xffc0u) + 0x40u);
+        g_c6e8 = (uint16_t)(((unsigned)h & 0xffc0u) + 0x40u);
+        if (g_c614 != NULL) {
+            HGDIOBJ old = SelectObject(g_c5ec, g_c614);
+            DeleteObject(old);
+            g_c614 = NULL;
+        }
+        HBITMAP hbm = CreateCompatibleBitmap(g_c63c,
+                                             (int)(short)g_c690,
+                                             (int)(short)g_c6e8);
+        while (hbm == NULL) {
+            if (g_c690 == w && g_c6e8 == h) {
+                g_c6e8 = 0;
+                g_c690 = 0;
+                return 0;
+            }
+            g_c690 = w;
+            g_c6e8 = h;
+            hbm = CreateCompatibleBitmap(g_c63c, (int)(short)w, (int)(short)h);
+        }
+        g_c614 = SelectObject(g_c5ec, hbm);
+    }
+    return 1;
+}
+
+/* 0x401540 — draw one merged group: repeatedly pick the bottom-most
+ * drawable entity (off = y - (flags & 0x40 ? col height : 0)), blit it
+ * onto the canvas (mask MERGECOPY + image SRCCOPY, or image SRCPAINT on
+ * the first draw after a canvas clear), flag it and unlink it; flag-2
+ * nodes are unlinked inline (flag 1 cleared -> canvas needs clearing).
+ * The canvas is then composited back to the window at the group bbox. */
+static void draw_entity(HDC hdc, ski_ent_t *e)
+{
+    short x1 = (short)e->bbox[0];
+    short y1 = (short)e->bbox[1];
+    uint16_t cw = (uint16_t)(e->bbox[2] - e->bbox[0]);
+    uint16_t ch = (uint16_t)(e->bbox[3] - e->bbox[1]);
+    int drawn = 0;
+    int cleared = 0;
+    ski_ent_t *head = e;
+    ski_ent_t *q;
+
+    if (e == NULL)
+        ski_assert_fail(SKI_ASSERT_FILE, 0x46d);
+    if (hdc == NULL)
+        ski_assert_fail(SKI_ASSERT_FILE, 0x46e);
+    if ((e->flags & 0x10) == 0)
+        ski_assert_fail(SKI_ASSERT_FILE, 0x46f);
+    if (e == NULL)
+        return;
+
+    /* Walk the group chain to a drawable node: (flags & 1) << 1 == flags & 2. */
+    for (q = e; ((q->flags & 1) << 1) != (q->flags & 2);) {
+        q = q->gnext;
+        if (q == NULL)
+            return;
+    }
+
+    if (ski_offscreen_resize(cw, ch) == 0) {
+        /* OOM fallback: black out the group area in the window and blit
+         * every standalone sprite directly (no mask pass).
+         * TODO(T12-verify): raw bytes load this PatBlt's HDC from an
+         * unwritten local slot, not the param_1 register; the decompiled
+         * C (authority) passes param_1. */
+        PatBlt(hdc, x1, y1, cw, ch, 0xff0062 /* BLACKNESS */);
+        for (q = e; ; q = q->gnext) {
+            uint32_t f = q->flags;
+            if ((f & 1) == 0) {
+                if ((f & 2) == 0) {
+                    const ski_col_entry_t *c = (const ski_col_entry_t *)q->colptr;
+                    const int32_t *r = (f & 4) ? q->rect : ski_entity_rect(q);
+                    BitBlt(hdc, r[0], r[1], (int)(short)c->width,
+                           (int)(short)c->height, c->img_dc,
+                           0, (int)(short)c->yoff, 0x8800c6 /* SRCCOPY */);
+                    q->flags = f | 1;
+                }
+            } else if ((f & 2) != 0) {
+                q->flags = f & ~1u;
+            }
+            if (q->gnext == NULL)
+                return;
+        }
+    }
+
+    do {
+        ski_ent_t *best = NULL;
+        int32_t best_off = 0;
+        ski_ent_t **best_link = NULL;
+        ski_ent_t *p;
+        ski_ent_t **prev;
+
+        for (p = head, prev = &head; p != NULL;) {
+            uint32_t f = p->flags;
+            ski_ent_t **pl = &p->gnext;
+            if ((f & 2) == 0) {
+                int32_t h = (f & 0x40)
+                    ? (int32_t)((const ski_col_entry_t *)p->colptr)->height : 0;
+                int32_t off = p->y - h;
+                if (best == NULL || off < best_off) {
+                    best = p;
+                    best_off = off;
+                    best_link = prev;
+                }
+            } else {
+                if ((f & 1) != 0) {
+                    cleared = 1;
+                    p->flags = f & ~1u;
+                }
+                *prev = p->gnext; /* unlink (head updates when prev == &head) */
+            }
+            p = *pl;
+            if (p != NULL)
+                prev = pl; /* link that pointed to the new p */
+        }
+
+        if (best != NULL) {
+            const ski_col_entry_t *c = (const ski_col_entry_t *)best->colptr;
+            int32_t colh = (int32_t)(short)c->height;
+            int32_t colw = (int32_t)(short)c->width;
+            int32_t yoff = (int32_t)(short)c->yoff;
+            const int32_t *r =
+                (best->flags & 4) ? best->rect : ski_entity_rect(best);
+            int32_t dx = r[0] - x1;
+            int32_t dy = r[1] - y1;
+
+            if (r[2] - r[0] != colw)
+                ski_assert_fail(SKI_ASSERT_FILE, 0x4b3);
+            if (r[3] - r[1] != colh)
+                ski_assert_fail(SKI_ASSERT_FILE, 0x4b4);
+            if (dx < 0)
+                ski_assert_fail(SKI_ASSERT_FILE, 0x4b5);
+            if (dy < 0)
+                ski_assert_fail(SKI_ASSERT_FILE, 0x4b6);
+            if ((int32_t)(short)cw < colw)
+                ski_assert_fail(SKI_ASSERT_FILE, 0x4b7);
+            /* TODO(T12-verify): raw bytes compare/measure the canvas
+             * height with the rect pointer in ESI (the decompiler marked
+             * it unaff_ESI); the decompiled C (authority) uses ch here
+             * and as the PatBlt height below. */
+            if ((int32_t)(short)ch < colh)
+                ski_assert_fail(SKI_ASSERT_FILE, 0x4b8);
+
+            if (drawn == 0) {
+                drawn = 1;
+                if (dx > 0 || dy > 0 || colw < (int32_t)(short)cw ||
+                    colh < (int32_t)(short)ch)
+                    PatBlt(g_c5ec, 0, 0, (int)(short)cw, (int)(short)ch,
+                           0xff0062 /* BLACKNESS */);
+                BitBlt(g_c5ec, dx, dy, colw, colh, c->img_dc, 0, yoff,
+                       0xcc0020 /* SRCPAINT */);
+            } else {
+                BitBlt(g_c5ec, dx, dy, colw, colh, c->mask_dc, 0, yoff,
+                       0xee0086 /* MERGECOPY */);
+                BitBlt(g_c5ec, dx, dy, colw, colh, c->img_dc, 0, yoff,
+                       0x8800c6 /* SRCCOPY */);
+            }
+            best->flags |= 1;
+            *best_link = best->gnext; /* unlink the drawn entity */
+        }
+    } while (head != NULL);
+
+    if (drawn != 0) {
+        /* TODO(T12-verify): raw bytes load this composite's hdc/x/y from
+         * slots that hold the last-best node pointer / return address;
+         * the decompiled C (authority) composites the canvas at
+         * (x1, y1) into param_1, matching the original's on-screen
+         * behavior (scene visible at the group bbox). */
+        BitBlt(hdc, (int)(short)x1, (int)(short)y1,
+               (int)(short)cw, (int)(short)ch, g_c5ec, 0, 0,
+               0xcc0020 /* SRCPAINT */);
+        return;
+    }
+    if (cleared != 0) {
+        PatBlt(hdc, (int)(short)x1, (int)(short)y1,
+               (int)(short)cw, (int)(short)ch, 0xff0062 /* BLACKNESS */);
+    }
+}
+
+/* 0x401060 — scene render. Pass 1: partner cleanup — an entity with no
+ * flag 1/2/8 whose partner has flag 1+2, same col and an identical rect
+ * is kept (flag 1 set), the partner loses flag 1 and is died. Pass 2:
+ * cull — every non-dead entity refreshes its rect (cached or computed),
+ * gets 0x10 iff it overlaps rc, and visible ones copy the rect into the
+ * group bbox and reset gnext. Pass 3: merge — each 0x10 entity merges
+ * with its partner (if 0x10 and bbox-overlapping), then rescans from the
+ * list head (restart after each merge) merging further 0x10
+ * bbox-overlapping entities, stopping at itself. Pass 4: draw each 0x10
+ * entity via draw_entity. Pass 5: die every flag-2 entity, then reap. */
 void ski_render(HDC hdc, const RECT *rc)
 {
-    (void)hdc; (void)rc;
-    /* T12 */
+    ski_ent_t *e;
+
+    if (hdc == NULL)
+        ski_assert_fail(SKI_ASSERT_FILE, 0x4f8);
+    if (rc == NULL)
+        ski_assert_fail(SKI_ASSERT_FILE, 0x4f9);
+
+    for (e = (ski_ent_t *)g_c618; e != NULL; e = e->next) {
+        ski_ent_t *p;
+        if ((e->flags & 0xb) != 0)
+            continue;
+        p = e->partner;
+        if (p == NULL || (p->flags & 3) != 3 || e->col != p->col)
+            continue;
+        const int32_t *rp = (p->flags & 4) ? p->rect : ski_entity_rect(p);
+        const int32_t *ra = (e->flags & 4) ? e->rect : ski_entity_rect(e);
+        if (ski_rect_equal(ra, rp) != 0) {
+            e->flags |= 1;
+            /* Disasm 0x401106-0x401110: the partner (the split copy) loses
+             * flag 1 (and eax,ebx: `and eax, 0xfffffffe`), NOT flag 2. Only
+             * without flag 1 does die() actually kill it (flag 8), and the
+             * end-of-render reap then splices it out. Clearing flag 2
+             * instead (the decompiler's mis-render) left the copy
+             * in-list, so it and the original were both re-split by
+             * ski_world_shift every tick — exponential pool growth, assert
+             * 0x359 ~13 ticks after descent start. */
+            p->flags &= ~1u;
+            ski_entity_die(p);
+        }
+    }
+
+    for (e = (ski_ent_t *)g_c618; e != NULL; e = e->next) {
+        uint32_t f = e->flags;
+        if ((f & 8) != 0) {
+            /* Disasm 0x40112e-0x401137: `test al,8; and al,0xef` — the
+             * dead branch clears flag 8 (the entity is no longer "dead" and
+             * is kept in the list as a ghost until the off-world cull in
+             * physics pass 1 re-dies it) and leaves 0x10 untouched.
+             * Collide-killed entities are therefore NOT reaped at render
+             * end — same as the original. */
+            e->flags = f & ~0x8u;
+            continue;
+        }
+        const int32_t *r = (f & 4) ? e->rect : ski_entity_rect(e);
+        int vis = ski_rect_overlap(r, (const int32_t *)rc) & 1; /* RECT = 4 ints */
+        /* Disasm 0x401154-0x401162: `and edx,0xffffffef; or eax,edx` after
+         * `and eax,1; shl eax,4` — new flags = (vis ? 0x10 : 0) | (old & ~8).
+         * 0x10 is STICKY: once set (visible, or inherited via alloc_copy),
+         * it survives invisible frames. Only flag 8 (dead) is cleared here. */
+        e->flags = (uint32_t)(vis << 4) | (f & ~0x8u);
+        /* Disasm 0x401162: `test bl,al` (bl=0x10, al=new flags) — the
+         * bbox/gnext reset runs when the NEW flags carry 0x10, i.e. when
+         * visible OR 0x10 was already sticky. Not when vis alone. */
+        if ((e->flags & 0x10) != 0) {
+            e->bbox[0] = r[0];
+            e->bbox[1] = r[1];
+            e->bbox[2] = r[2];
+            e->bbox[3] = r[3];
+            e->gnext = NULL;
+        }
+    }
+
+    for (e = (ski_ent_t *)g_c618; e != NULL; e = e->next) {
+        ski_ent_t *p;
+        if ((e->flags & 0x10) == 0)
+            continue;
+        p = e->partner;
+        if (p != NULL && (p->flags & 0x10) != 0 &&
+            ski_rect_overlap(e->bbox, p->bbox) != 0)
+            ski_group_merge(e, p);
+        for (p = (ski_ent_t *)g_c618;; p = p->next) {
+            if (p == NULL || p == e)
+                break;
+            if ((p->flags & 0x10) != 0 &&
+                ski_rect_overlap(e->bbox, p->bbox) != 0) {
+                ski_group_merge(e, p);
+                p = (ski_ent_t *)g_c618; /* restart from the head */
+            }
+        }
+    }
+
+    for (e = (ski_ent_t *)g_c618; e != NULL; e = e->next) {
+        if ((e->flags & 0x10) == 0)
+            continue;
+        draw_entity(hdc, e);
+    }
+    for (e = (ski_ent_t *)g_c618; e != NULL; e = e->next)
+        if ((e->flags & 2) != 0)
+            ski_entity_die(e);
+    ski_entity_reap();
 }
 
-/* 0x406100 — walk the active list, refresh rects, intersect-test, render. */
+/* 0x406100 — WM_PAINT path: clear flag 1 (needs-repaint) on every entity
+ * overlapping the invalidated rect, then render. */
 void ski_paint_scene(HDC hdc, const RECT *rc)
 {
-    (void)hdc; (void)rc;
-    /* T12 */
+    ski_ent_t *e;
+
+    if (hdc == NULL)
+        ski_assert_fail(SKI_ASSERT_FILE, 0x543);
+    if (rc == NULL)
+        ski_assert_fail(SKI_ASSERT_FILE, 0x544);
+    for (e = (ski_ent_t *)g_c618; e != NULL; e = e->next) {
+        const int32_t *r = (e->flags & 4) ? e->rect : ski_entity_rect(e);
+        if (ski_rect_overlap(r, (const int32_t *)rc) != 0) /* RECT = 4 ints */
+            e->flags &= ~1u;
+    }
+    ski_render(hdc, rc);
 }
 
-/* 0x401b80 — panel values (style/dist/speed/score) at x = label_w + 2;
- * stamps g_c5dc = g_c698 (status throttle). */
+/* 0x401b80 — panel values (Time/Dist/Speed/Style) at x = label_w + 2,
+ * lines at y = 2 + n * tmHeight. Stamps g_c5dc = g_c698 (throttle). */
 void ski_status_draw_values(HDC hdc)
 {
-    (void)hdc;
-    /* T12 */
+    short label_x = (short)(g_c66e + 2);
+    short y = 2;
+    char buf[20];
+    short dist = 0;
+    short speed = 0;
+    int n;
+    int dv;
+
+    if (g_c72c != NULL) {
+        const ski_ent_t *pl = (const ski_ent_t *)g_c72c;
+        if (g_c5f4 != 0)
+            speed = (short)(((int32_t)(int16_t)pl->speed * 1000) /
+                            ((int32_t)(uint16_t)g_c5f4 << 4));
+        dist = pl->y;
+        if (g_c95c != 0)
+            dist = (short)(0x21c0 - dist);
+        else if (g_c954 != 0 || g_c958 != 0)
+            dist = (short)(0x4100 - dist);
+    }
+
+    n = ski_fmt_time(g_c944, buf) & 0xffff;
+    ski_text_draw(hdc, buf, label_x, &y, n);
+
+    dv = (int)(int16_t)((dist + (int16_t)((dist >> 31) & 0xf)) >> 4);
+    n = wsprintfA(buf, ski_str_cache(12 /* STR_FMT_DIST */), dv);
+    ski_text_draw(hdc, buf, label_x, &y, n);
+
+    n = wsprintfA(buf, ski_str_cache(13 /* STR_FMT_SPEED */), (int)speed);
+    ski_text_draw(hdc, buf, label_x, &y, n);
+
+    n = wsprintfA(buf, ski_str_cache(14 /* STR_FMT_SCORE */), (long)g_c6a8);
+    ski_text_draw(hdc, buf, label_x, &y, n);
+
     g_c5dc = g_c698;
 }
 
