@@ -2389,9 +2389,162 @@ void ski_game_physics(void)
     }
 }
 
+/* ---------------- T13 tick-locked harness (input + frame capture) --------
+ * Contract (harness/run_scenario.sh + diff.py): ski_in.bin in CWD holds one
+ * little-endian u16 per game tick (harness/gen_input.py); a set bit at
+ * word t is exactly ONE WM_KEYDOWN(vk) at the start of game tick t+1.
+ * frame N (0-based, frame_%06d_main.ppm) is dumped at the TOP of tick call
+ * N+1 — i.e. after tick body N (initial state for N = 0) and BEFORE word[N]
+ * injection. Frame = main window client area, P6 TOP-DOWN 24bpp
+ * (GetDIBits with negative biHeight; diff.py contract).
+ * The hook is inert unless CWD/ski_in.bin exists (normal runs unaffected).
+ */
+#if SKI_HARNESS
+#include "ski_keys.h"
+
+static uint32_t g_har_tick;             /* frame/word index (0-based) */
+static FILE    *g_har_in;               /* ski_in.bin */
+static uint8_t *g_har_buf;              /* DIB section raster (owned) */
+static uint32_t g_har_buflen;           /* w*h (pixels) of the section */
+static HDC      g_har_memdc;
+static HBITMAP  g_har_hbm;
+static int      g_har_state = -1;      /* -1 uninit, 0 inert, 1 active */
+static const UINT ski_har_vk[SKI_NUM_KEYS] = {
+    SKI_VK_LEFT, SKI_VK_RIGHT, SKI_VK_UP, SKI_VK_DOWN, SKI_VK_CROUCH,
+    SKI_VK_FACING1, SKI_VK_FACING3, SKI_VK_FACING7, SKI_VK_FACING9,
+    SKI_VK_RESTART, SKI_VK_PAUSE, SKI_VK_ADVANCE,
+};
+
+static void ski_har_dbg(const char *s)
+{
+    static FILE *d = NULL;
+    if (d == NULL)
+        d = fopen("/tmp/ski_har.log", "w");
+    if (d != NULL) {
+        fputs(s, d);
+        fclose(d);
+        d = NULL;
+    }
+}
+
+static int ski_harness_ready(void)
+{
+    if (g_har_state < 0) {
+        g_har_in = fopen("ski_in.bin", "rb"); /* absent on normal runs: inert */
+        g_har_state = (g_har_in != NULL) ? 1 : 0;
+    }
+    return g_har_state;
+}
+
+static void ski_harness_frame(void)
+{
+    RECT rc;
+    int32_t w, h;
+    if (g_c6c8 == NULL) {
+        ski_har_dbg("no window\n");
+        return;
+    }
+    if (GetClientRect(g_c6c8, &rc) == 0) {
+        ski_har_dbg("no rect\n");
+        return;
+    }
+    w = rc.right - rc.left;
+    h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0)
+        return;
+    /* Wine's GetDIBits fails on window DCs (ERROR_INVALID_DATA, 24/32bpp).
+     * Grab the client area by BitBlt into a cached top-down 32bpp DIB
+     * section; the section address IS the raster (no GetDIBits needed). */
+    if (g_har_buflen != (uint32_t)w * h) {
+        if (g_har_memdc != NULL) {
+            DeleteDC(g_har_memdc);
+            g_har_memdc = NULL;
+        }
+        if (g_har_hbm != NULL) {
+            DeleteObject(g_har_hbm);
+            g_har_hbm = NULL;
+        }
+        BITMAPINFO bmi;
+        memset(&bmi, 0, sizeof(bmi));
+        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bmi.bmiHeader.biWidth = w;
+        bmi.bmiHeader.biHeight = -h; /* top-down (diff.py P6 contract) */
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
+        void *bits = NULL;
+        g_har_hbm = CreateDIBSection(NULL, &bmi, 0, &bits, NULL, 0);
+        if (g_har_hbm == NULL || bits == NULL) {
+            ski_har_dbg("dibsec fail\n");
+            return;
+        }
+        g_har_buf = (uint8_t *)bits;
+        g_har_buflen = (uint32_t)w * h;
+        g_har_memdc = CreateCompatibleDC(NULL);
+        if (g_har_memdc == NULL || SelectObject(g_har_memdc, g_har_hbm) == 0) {
+            ski_har_dbg("memdc fail\n");
+            return;
+        }
+    }
+    HDC dc = GetDC(g_c6c8);
+    if (dc == NULL) {
+        ski_har_dbg("no dc\n");
+        return;
+    }
+    if (BitBlt(g_har_memdc, 0, 0, w, h, dc, 0, 0, SRCCOPY) == 0) {
+        ski_har_dbg("bitblt fail\n");
+        ReleaseDC(g_c6c8, dc);
+        return;
+    }
+    ReleaseDC(g_c6c8, dc);
+    /* P6 top-down 24bpp from the 32bpp raster (BGR order is PPM order). */
+    char name[32], hdr[24];
+    wsprintfA(name, "frame_%06u_main.ppm", g_har_tick);
+    FILE *f = fopen(name, "wb");
+    if (f == NULL) {
+        ski_har_dbg("fopen w fail\n");
+        return;
+    }
+    int hl = wsprintfA(hdr, "P6\n%d %d\n255\n", w, h);
+    fwrite(hdr, 1, (size_t)hl, f);
+    for (int y = 0; y < h; y++) {
+        const uint8_t *p = g_har_buf + (size_t)y * w * 4;
+        for (int x = 0; x < w; x++)
+            fwrite(p + (size_t)x * 4, 1, 3, f);
+    }
+    fclose(f);
+}
+
+static void ski_harness_inject(void)
+{
+    uint8_t b[2];
+    if (g_har_in == NULL)
+        return;
+    if (fseek(g_har_in, (long)g_har_tick * 2, SEEK_SET) != 0 ||
+        fread(b, 1, 2, g_har_in) != 2)
+        return; /* past the scenario: no further input */
+    uint16_t w = (uint16_t)(b[0] | ((uint16_t)b[1] << 8));
+    for (int i = 0; i < SKI_NUM_KEYS; i++)
+        if (w & (1u << i))
+            ski_wproc_main(g_c6c8, 0x100 /* WM_KEYDOWN */, ski_har_vk[i], 0);
+}
+
+static void ski_harness_step(void)
+{
+    if (!ski_harness_ready())
+        return;
+    ski_harness_frame();  /* frame g_har_tick: after the previous body */
+    ski_harness_inject(); /* word g_har_tick: for THIS tick's body */
+    g_har_tick++;
+}
+#endif /* SKI_HARNESS */
+
 /* 0x401000 — one fixed-step tick (40 ms timer callback). */
 void ski_tick(void)
 {
+#if SKI_HARNESS
+    ski_harness_step();
+#endif
     DWORD now;
 #if SKI_DETERMINISTIC
     /* T8 seed freeze: the original's GetTickCount() advances 40 ms per
