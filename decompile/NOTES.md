@@ -1830,3 +1830,122 @@ flags) — the pass-2 bbox/gnext reset runs when the NEW flags carry 0x10
 (vis OR sticky-0x10), NOT vis-only. The decompiled FUN_00401060.c
 misattributes that condition to the overlap return; the raw disasm is
 authoritative and the rebuild already implements it correctly.
+
+## T11 residual (py≈1065, tick +97) — RESOLVED: pine-sway 0x3e/0x3f frames
+
+After the pass-2 0x10 fix (below), the aligned differential (original
+/tmp/orig_r1.log vs rebuild /tmp/rebuild_state, SKI_DBG_FULL=1) matched
+0-tolerance — c16c, player fields, every entity fingerprint — through
+descent tick +96 (py≈1053). First divergence at tick +97: a swaying
+green pine (type 10, x=-864 y=1148) at frame 0x3d (orig) vs 0x3e
+(rebuild).
+
+**Root cause — `ski_anim_type10` (0x4037b0) cases 0x3e/0x3f.** Disasm:
+case 0x3e @0x4038c0 does `cmpw $0,steer; jl 0x4038e4` (assert 0x8c3 if
+steer ≥ 0), and case 0x3f @0x4038ce does `cmpw $0,steer; jg 0x4038e4`
+(assert 0x8c8 if steer ≤ 0). **0x4038e4 is `mov $0x3d,%edi` immediately
+before the shared tail 0x4038e9 (step + set_frame(edi))** — i.e. both
+sway frames transition to 0x3d every tick, so a swaying pine alternates
+0x3d↔0x3e (steer −1) or 0x3d↔0x3f (steer +1) until the 0x3d
+`rand_range(10)==0` exit (10%/tick) zeroes steer and returns it to 0x3c.
+The rebuild transcribed both cases as "keep the frame" (break to the tail
+with the original frame), stranding the pine at 0x3e forever.
+
+**Why that broke the diff:** while parked at 0x3e the rebuild skipped the
+0x3d `rand_range(10)` call on every other tick — a −1 rand() per pair of
+ticks against the original, which visibly re-arms c16c at the first 0x3d
+tick (window +97→+98: original consumes 6 rand() calls, rebuild 5 —
+measured by LCG orbit distance between consecutive samples). From there
+every later spawn/pick diverges: by tick +215 the trees differ enough
+that the player's collision history diverges (rebuild player enters the
+0x0d crouch frame at +215; original stays 0x01).
+
+**Fix (src/ski_core.c, ski_anim_type10):** cases 0x3e/0x3f set
+`frame = 0x3d` before the shared tail (with the assert checks unchanged:
+0x3e requires steer < 0, 0x3f requires steer > 0). Live confirmation in
+the original's state log: the pine's frame runs 0x3d,0x3e,0x3d,0x3e on
+consecutive samples at a constant −1 x-drift (step with steer −1).
+
+**Pass-2 0x10 fix verification (same run pair, pre-pine-fix):** the
+sticky-0x10/bbox-store fix resolved BOTH open items from the py=126
+section: (1) the player/banner flag sequences now match — player fl is
+0x35 on both sides at every aligned sample (pre-fix the rebuild lost 0x10
+on alternating ticks); (2) the gnext-cycle hang is gone — the rebuild
+descended 7696 samples (past the original's py=4279 crash, through the
+F2 restart) with no cycle spin. Residual apparent diffs in that run pair
+were all diagnosed as original-poller sampling-phase artifacts, not logic
+diffs: the original's /proc/mem poller snapshots land at a variable
+sub-tick phase (a freshly spawned entity shows the 0x04 rect-cached bit
+one sample earlier than the rebuild's top-of-physics in-process dump, and
+self-converges next sample; c16c snapshots occasionally sit 1–9 LCG steps
+ahead of the rebuild's while both stay on the same orbit — proven by the
+streams re-syncing to identical values at +102/+103 and by py/px/n
+matching tick-for-tick through the whole descent).
+
+**RESOLVED (2026-08-28):** post-pine-fix differential (same
+/tmp/orig_r1.log vs fresh rebuild capture, KP_1 boundary re-hit exactly:
+first fr=1 at sample 468, r=0x69780dfd): 0-tolerance FULL-STATE parity
+(player header + complete entity multiset + c16c) from tick 0 through
++626 — 627 ticks, start to crash. New divergence was at +320: the
+landing tick of the jump taken at +305 (type-0xf ramp: `case 0xf`
+collision sets transition=4, frame 0x0d; mode counts down
+4,10,15,19,22,24,25,25,24,22,19,15,10,4 → 0). Original landed into
+frame 0x00 (then speed decayed 24→22→20→18→16 via anim row max=16);
+rebuild stayed at 0x0d, speed 24. Both sides then crashed at exactly
+py=4279, fr=0x0c, sp=0.
+
+### 5. Landing-frame table (0x40a434) — the +320 fix
+
+Disasm 0x402ac9 (player activate, frame 0x0d..0x15, mode==0 branch):
+`mov 0x40a434(,%edi,4),%edi` — the landing REPLACES the frame with
+`land_frame[old_frame]` BEFORE the sound choice and set_frame. The
+rebuild had misread the table as a sound-ID table (value compared to
+0x11 for the −0x40/sound_1 branch) and never replaced the frame.
+Table (only reference in .text):
+
+|old frame|0x0d|0x0e|0x0f|0x10|0x11|0x12|0x13|0x14|0x15|
+|---|---|---|---|---|---|---|---|---|---|
+|new frame|0|3|6|0xb|0xb|0xb|0xb|0xb|0xb|
+
+0x0d → 0 (normal landing, resume slide); 0x0e/0x0f → 3/6; 0x10..0x15 →
+0xb (crash pose). The looked-up 0x11 check (score −0x40 + sound
+@0x40c6c0; else sound @0x40c718) is dead with the current table but is
+implemented. Fix in `ski_entity_activate` (table renamed
+`ski_land_frame` with the corrected comment): `frame =
+ski_land_frame[frame];` then the 0x11 sound branch, then the existing
+set_frame/score flow — which now correctly scores the NEW frame (0 →
+none; 0xb → none via score-jt[4] = style/return tail; verified score
+switch 0x402b74/0x402b88 byte-exact: 7/8/9/10→−1, 0x10→+2,
+0x12/0x13→+4, 0x14/0x15→+8, all else none).
+
+**Teleport keep-path — CLOSED, rebuild was already correct.** The T12
+audit flagged `ski_teleport`'s `(keep|8u)<<2` as SUSPECT. Full disasm
+of 0x402390 (fastcall: e→ecx, x→edx, y/mode on stack, `ret $8`):
+keep=1 iff **flag 0x04 SET and entity IS the player and mode
+unchanged** (0x40241c `test edi,edi; je` — edi = bit2 of flags; je
+skips to keep=0 when the bit is CLEAR; then is-player test; then
+mode-changed test; only the fall-through gets keep=1). Rebuild
+`keep = (f & 4) && is_player && (old_mode == mode)` matches
+exactly. Fresh entities (template @0x40c030 is all-zero except
+type=0x12/frame=0x40, both overwritten by entity_new) therefore never
+get the 0x04 bit at teleport — rect is computed on first access
+(ski_entity_rect asserts 0x3a4 if 0x04 already set), so startpoles/
+gates spawn clean. Also confirmed: teleport calls ski_world_shift(x,y)
+when the PLAYER's position changed, and does the group split (flag 1)
+before the flag recompute.
+
+**Post-crash c16c offset — sampling-phase artifact, not logic.**
+After the crash (py=4279, fr=0x0c, sp=0, 17 frozen entities) the two
+c16c streams show bounded phase offsets (transient 1–2-step bumps at
++627/+691/+1286 that self-converge in one sample; from +1961 a
+10–14-step oscillating offset with O leading). Proof it is an artifact:
+the per-sample LCG step-count distributions in the idle region are
+statistically identical on both sides (1-step: 249/257, 2: 1158/1180,
+3: 2188/2162, 4: 1892/1884, 5: 713/732, 6: 83/80, ≥7: 9/5, >32: 8/1 out
+of 6300 — O/R), i.e. both processes run the same value-dependent
+idle rand-consumer with the same per-tick call pattern; the offset is
+the external /proc poller's beat phase vs the in-process tick-boundary
+dump. All game state (player + entity multiset incl. positions/
+frames) is identical at every aligned sample post-crash. No logic
+action required. (Note for T14: comparisons must use the pre-crash
+active descent; post-crash c16c is not comparable by construction.)

@@ -446,8 +446,14 @@ static const uint32_t ski_spawn_frame[12] = {
     6, 22, 27, 31, 39, 42, 42, 42, 42, 56, 60, 1
 };
 
-/* a434: frame -> sound id (22 x u32; low16 = id, 0x11 = "crash" special). */
-static const uint32_t ski_sound_frame[22] = {
+/* a434: landing-frame table (22 x u32). The ONLY reference in .text is the
+ * player landing branch (0x402ac9): when a frame 0x0d..0x15 player hits
+ * mode 0, the frame is REPLACED by land_frame[old_frame] before the sound
+ * choice and set_frame. 0x0d -> 0 (normal landing), 0x0e -> 3, 0x0f -> 6,
+ * 0x10..0x15 -> 0xb (crash pose). A looked-up 0x11 would mean crash-landing
+ * (score -0x40, sound_1); no current entry yields 0x11. Entries 0..0xc are
+ * never indexed by this branch. */
+static const uint32_t ski_land_frame[22] = {
     0x12, 0x00140001, 0, 0, 0x13, 0x00160001, 0, 0,
     0x14, 0x00160001, 0, 0, 0x15, 0, 3, 6,
     0xb, 0xb, 0xb, 0xb, 0xb, 0xb
@@ -1822,7 +1828,11 @@ void ski_anim_type9(ski_ent_t *e)
  * 0x40382c) reaches the tail with edi still the ORIGINAL frame — the
  * `mov $0x3d,%edi` at 0x403837 sits inside the rand==0 branch only.
  * Advancing to 0x3d with steer still 0 tripped the 0x8b8 assert two
- * ticks after the first pine spawn. */
+ * ticks after the first pine spawn. Cases 0x3e/0x3f likewise fall
+ * through 0x4038e4 (`mov $0x3d,%edi`) into the tail — see the case
+ * comments; a naive "keep frame" transcription strands the pine at
+ * 0x3e/0x3f and desynchronizes the RNG (the 0x3d rand(10) is then
+ * skipped on every other tick). */
 void ski_anim_type10(ski_ent_t *e)
 {
     uint32_t frame = e->frame;
@@ -1860,10 +1870,18 @@ void ski_anim_type10(ski_ent_t *e)
     case 0x3e:
         if (e->steer > -1)
             ski_assert_fail(SKI_ASSERT_FILE, 0x8c3);
+        /* 0x4038c5 jl 0x4038e4: falls through 0x4038e4 `mov $0x3d,%edi`
+         * then the shared tail — the frame is 0x3d, NOT 0x3e. A swaying
+         * pine therefore alternates 0x3d <-> 0x3e (or 0x3f) every tick
+         * until the 0x3d rand(10)==0 exit returns it to 0x3c. Verified
+         * against the original's live state log (O: 0x3d,0x3e,0x3d,0x3e
+         * every tick at fixed x-drift). */
+        frame = 0x3d;
         break;
     case 0x3f:
         if (e->steer < 1)
             ski_assert_fail(SKI_ASSERT_FILE, 0x8c8);
+        frame = 0x3d; /* 0x4038d3 jg 0x4038e4, same path as 0x3e */
         break;
     default:
         break; /* original keeps the existing frame (unreachable) */
@@ -1976,8 +1994,8 @@ ski_ent_t *ski_entity_activate(ski_ent_t *e)
             if (e->mode == 0) {
                 if (frame - 0xd > 8)
                     ski_assert_fail(SKI_ASSERT_FILE, 0x812);
-                uint32_t snd = ski_sound_frame[frame];
-                if (snd == 0x11) {
+                frame = ski_land_frame[frame]; /* 0x402ac9: landing replaces the frame */
+                if (frame == 0x11) {
                     ski_score_add(-0x40);
                     ski_snd_play(&ski_sound_1);
                 } else {
@@ -2808,26 +2826,25 @@ void ski_render(HDC hdc, const RECT *rc)
     for (e = (ski_ent_t *)g_c618; e != NULL; e = e->next) {
         uint32_t f = e->flags;
         if ((f & 8) != 0) {
-            /* Disasm 0x40112e-0x401137: `test al,8; and al,0xef` — the
-             * dead branch clears flag 8 (the entity is no longer "dead" and
-             * is kept in the list as a ghost until the off-world cull in
-             * physics pass 1 re-dies it) and leaves 0x10 untouched.
-             * Collide-killed entities are therefore NOT reaped at render
-             * end — same as the original. */
-            e->flags = f & ~0x8u;
+            /* Disasm 0x40112e-0x401137: `test al,8; and al,0xef; store;
+             * jmp 0x40118a` — the dead branch clears 0x10 (0xef = ~0x10,
+             * NOT ~8), keeps flag 8 (the entity is reaped at render end by
+             * pass 5 + ski_entity_reap), and skips rect/vis/bbox. No list
+             * unlink (0x40118a just advances to e->next). */
+            e->flags = f & ~0x10u;
             continue;
         }
         const int32_t *r = (f & 4) ? e->rect : ski_entity_rect(e);
         int vis = ski_rect_overlap(r, (const int32_t *)rc) & 1; /* RECT = 4 ints */
-        /* Disasm 0x401154-0x401162: `and edx,0xffffffef; or eax,edx` after
-         * `and eax,1; shl eax,4` — new flags = (vis ? 0x10 : 0) | (old & ~8).
-         * 0x10 is STICKY: once set (visible, or inherited via alloc_copy),
-         * it survives invisible frames. Only flag 8 (dead) is cleared here. */
-        e->flags = (uint32_t)(vis << 4) | (f & ~0x8u);
-        /* Disasm 0x401162: `test bl,al` (bl=0x10, al=new flags) — the
-         * bbox/gnext reset runs when the NEW flags carry 0x10, i.e. when
-         * visible OR 0x10 was already sticky. Not when vis alone. */
-        if ((e->flags & 0x10) != 0) {
+        /* Disasm 0x401154-0x401164: `mov 0x4c,%edx; and eax,1; shl eax,4;
+         * and edx,0xffffffef; or edx,eax; store` — new flags =
+         * (vis ? 0x10 : 0) | (old & ~0x10). 0x10 is recomputed EVERY frame
+         * from visibility (not sticky); flag 8 is untouched here. */
+        e->flags = (uint32_t)(vis << 4) | (f & ~0x10u);
+        /* Disasm 0x401162: `test al,bl` (bl=0x10, al=new flags) — the
+         * bbox copy + gnext reset runs iff the NEW flags carry 0x10,
+         * i.e. iff visible this frame. */
+        if (vis) {
             e->bbox[0] = r[0];
             e->bbox[1] = r[1];
             e->bbox[2] = r[2];
