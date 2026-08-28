@@ -501,9 +501,18 @@ static const ski_anim_row_t ski_anim_rows3[8] = {
     {1, 4, 0, 0, 0, {0, 0}, 38, {0, 0}}
 };
 
-/* Entity template (0x40c030): zeroed 80B, col = 0x12; from_template
+/* Entity template (0x40c030): PE .data initial values — type = 0x12,
+ * frame = 0x40, everything else zero (bytes dumped from the original).
+ * alloc/new_col overwrite type; set_frame overwrites frame when it
+ * differs (requested frames are always < 0x40, so every alloc-path
+ * entity gets its col from the frame table). new_col entities keep the
+ * template frame 0x40 (state parity with the original; draw is
+ * col-keyed, so the slot is behaviorally inert). from_template
  * overwrites colptr with the column table base. */
-static ski_ent_t ski_ent_template;
+static ski_ent_t ski_ent_template = {
+    .type = 0x12,
+    .frame = 0x40,
+};
 
 /* --- geometry ---------------------------------------------------------- */
 
@@ -1217,8 +1226,8 @@ void ski_gate_list_update(ski_gate_list_t *l)
         d = l->end;
     }
     int16_t view = (int16_t)g_c5fc;
-    int16_t top = (int16_t)g_c68c;
-    int16_t bot = (int16_t)g_c684;
+    int16_t top = (int16_t)g_c684; /* disasm 0x4040af: edi = c684 -> lo */
+    int16_t bot = (int16_t)g_c68c; /* disasm 0x4040a7: ebp = c68c -> hi */
     ski_gate_desc_t *end = l->end;
     for (; d < end; d = (ski_gate_desc_t *)((char *)d + sizeof(ski_gate_desc_t))) {
         ski_gate_step(d);

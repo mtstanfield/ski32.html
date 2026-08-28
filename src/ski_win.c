@@ -57,11 +57,62 @@ const ski_steer_pair_t ski_steer_table[22] = {
 
 /* ---------------- timer (0x4047c0) ---------------- */
 
+static void ski_key_down(uint32_t vk); /* fwd (defined below) */
+
+#if SKI_HARNESS
+/* T13/T14 differential alignment: fire the start key at the reference
+ * original's exact KP_1 boundary. In the captured original run the
+ * WM_KEYDOWN landed between timer callbacks 467 and 468: the last
+ * fr=3 sample holds A_466 (c16c after menu tick 466 = 0x12e83c69),
+ * tick 467 is a final MENU tick (4 RNG calls -> 0x69780dfd), and the
+ * first fr=1 sample holds that 0x69780dfd with sp/st/py still 0
+ * (verified: the original's first descent tick then ramps sp 0->1 with
+ * st 0->0, second tick sp 1->2 st 0->0, third sp 2->3 st 0->-1 —
+ * exactly ski_anim_update rows). SKI_ALIGN_C16C must be set to
+ * 0x69780dfd: it is both the hook's fire condition and the
+ * keydown-time injection value (a no-op at this boundary). A file-tail
+ * xdotool fire cannot reliably land inside one 40 ms window, so the
+ * harness synthesizes the keydown itself: at tick-callback entry, when
+ * c16c == SKI_ALIGN_C16C and the player sits at frame 3 / mode 0,
+ * call ski_key_down(0x61) before ski_tick() so THIS tick is the first
+ * descent tick — sample-identical to the original. One-shot (the same
+ * (c16c, frame) pair recurs in the post-F2 menu walk; the flag keeps
+ * it from refiring). */
+static void ski_harness_maybe_fire(void)
+{
+    static int fired = 0;
+    static int have_target = 0;
+    static uint32_t target = 0;
+    if (fired)
+        return;
+    if (!have_target) {
+        const char *a = getenv("SKI_ALIGN_C16C");
+        have_target = 1;
+        if (a == NULL)
+            return;
+        target = (uint32_t)strtoul(a, NULL, 0);
+        if (target == 0)
+            fired = 1; /* explicitly disabled */
+        return;
+    }
+    if (g_c72c == NULL || g_c16c != target)
+        return;
+    if (ENT32(g_c72c, ENT_FRAME) != 3 || ENT16(g_c72c, ENT_MODE) != 0)
+        return;
+    fired = 1;
+    ski_key_down(0x61);
+}
+#endif
+
 static LRESULT CALLBACK ski_tick_cb(HWND hwnd, UINT id, UINT msg, DWORD time)
 {
     (void)hwnd; (void)id; (void)msg; (void)time;
-    if (g_c67c != 0)
+    if (g_c67c != 0) {
+#if SKI_HARNESS
+        ski_harness_maybe_fire();
+#endif
         ski_tick();
+    }
     return 1;
 }
 
@@ -165,6 +216,28 @@ void ski_restart(void)
 
 static void ski_key_down(uint32_t vk)
 {
+#if SKI_HARNESS
+    /* T13/T14 differential alignment (harness-only): on the first
+     * start-key press (KP_1 / End), overwrite the RNG state with the
+     * reference original run's exact keydown-time c16c
+     * (SKI_ALIGN_C16C=0x...; for the captured run 0x69780dfd = A_467,
+     * after menu tick 467). The start transition (ski_set_frame 3->1)
+     * makes no rand calls, so keydown-time injection is exactly
+     * descent-tick-0 state. With the deterministic menu this value is
+     * already the natural c16c at the hook's fire boundary, so the
+     * injection is belt-and-suspenders (covers fire-latency jitter of
+     * the xdotool fallback path). */
+    static int align_done = 0;
+    if (!align_done && (vk == 0x23 || vk == 0x61)) {
+        align_done = 1;
+        const char *a = getenv("SKI_ALIGN_C16C");
+        if (a != NULL) {
+            uint32_t v = (uint32_t)strtoul(a, NULL, 0);
+            if (v != 0)
+                g_c16c = v;
+        }
+    }
+#endif
     /* First switch (0x4063a8, idx table 0x4063bc, byte-verified):
      * VK_RETURN 0x0d -> Enter gate; VK_ESCAPE 0x1b -> minimize;
      * VK_F2 0x71 -> restart; VK_F3 0x72 -> pause toggle;

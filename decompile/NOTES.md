@@ -1748,3 +1748,85 @@ full-entity-list diff (SKI_DBG_FULL) to pin down.
 fix (player trajectory + RNG match through py=114). The residual py=126
 one-entity difference means the full crash point is not yet bit-identical;
 left open for a follow-up full-list diff rather than looped verification.
+
+## T11 residual (py=126) — RESOLVED: two c720/transcription bugs + exact-boundary alignment
+
+**Root cause 1 — `ski_gate_list_update` (0x4040a0) band swap.** The rebuild
+transcribed the view-band check with c684/c68c swapped: disasm 0x4040a7/
+0x4040af gives `ebp = c68c - view + 0x3c` (HI) and `edi = c684 - view -
+0x3c` (LO) → band = [-424, 670) at the 640x734 client (world rect = client
+expanded ±0x78). The rebuild had lo = c68c-view-0x3c (550) > hi =
+c684-view+0x3c (-304) — an EMPTY band, so `ski_gate_update` never ran for
+any c720 desc: the two recirculating start banners (type 4, cols 0x43/0x41)
+never spawned, and the `rand_range(1000)` snowboarder draw in
+`ski_gate_type4` (gated on `d->ent != NULL && frame == 0x27`) never
+executed — 1-2 RNG calls/tick missing from the whole menu+descent, and
+2 entities missing from the KP_1 world. `ski_gate_scan` was already
+correct; only list_update had the swap.
+
+**Root cause 2 — entity template (0x40c030) initial values.** The template
+lives in PE .data, not BSS: bytes at file offset 0xc030 give `type = 0x12`,
+`frame = 0x40`, rest zero. `ski_entity_new_col` entities (startpoles,
+section heads, type ≥ 0xb spawns) keep template frame 0x40; the zeroed
+rebuild template gave them frame 0 (draw is col-keyed, so pixel-inert, but
+the u16 @0x1c state field must match). Fix: `static ski_ent_t
+ski_ent_template = { .type = 0x12, .frame = 0x40 };`
+
+**Alignment — the original's KP_1 boundary (exact).** The deterministic
+rebuild menu reproduces the captured original run's KP_1 state bit-exactly
+at menu tick T_A = 466 (last fr=3 sample: c16c = 0x12e83c69, 10 entities:
+banners cols 67/65 at y=-92/+92, section heads, startpoles, player — the
+earlier "original menu is non-deterministic" conclusion was wrong). Tick
+467 is a final MENU tick (4 RNG calls → c16c = 0x69780dfd), and the
+original's WM_KEYDOWN landed between ticks 467 and 468: the first fr=1
+sample holds c16c = 0x69780dfd with sp/st/py = 0. Verified against the
+post-boundary ramp (0x403430 rows): tick 1 sp 0→1 st 0→0, tick 2 sp 1→2
+st 0→0, tick 3 sp 2→3 st 0→-1 — matches the original exactly. The harness
+fires the rebuild's KP_1 deterministically at that boundary:
+`ski_harness_maybe_fire` in src/ski_win.c (timer callback, before
+`ski_tick()`: when `g_c16c == SKI_ALIGN_C16C` and player frame 3 / mode 0,
+call `ski_key_down(0x61)`; one-shot; SKI_ALIGN_C16C=0x69780dfd is both the
+fire condition and the keydown-time injection value — a no-op there).
+A file-tail xdotool fire (tools/fire_on_c16c.py) cannot reliably land
+inside one 40 ms window and fires one tick early/late; keep it only as a
+backup (it is a no-op when the hook has fired).
+
+**Verification (tools/diff_runs.py, original /tmp/orig_r1.log vs rebuild
+/tmp/rebuild_state, SKI_DBG_FULL=1):** pre-boundary A_466 (last fr=3 on
+both sides): FULL MATCH. First fr=1 (A_467, r=69780dfd) on both sides:
+identical (px/st/sp/md/fr/n/cy/cx/fl + full entity list). Descent:
+c16c, entity count, player fields, and every entity fingerprint match
+0-tolerance through at least descent tick +16 (py=114). The original for
+this seed crashes at py=4279 (descent tick +346; earlier NOTES py=1581
+figure was from a different original run).
+
+**Remaining (open, blocks crash-point parity):**
+1. Flag 0x20 (col/pos-changed) phase: original player fl runs 35/15/35/
+   35/35/… (0x20 set by each tick's pos change, cleared by draw), rebuild
+   alternates 25/35/25/35 (one tick late/early); at tick +12 one entity
+   (col 27 type 11) also differs in the 0x04 rect-cached bit (orig 0x64,
+   reb 0x60). Suspect: flag-4/0x20 management in `ski_entity_rect`
+   (0x401410) and the render pass-2 bbox/rect handling — compare the
+   rebuild against FUN_00401410.c next.
+2. gnext cycle hang at py≈630 (descent tick ~+59), BOTH aligned and
+   misaligned runs; the original does not hang (runs to py=4279). Live
+   memory of the hung state (read via /proc/<pid>/mem, rebuild globals at
+   their nm addresses, e.g. list head 0x41a204): 2-cycle
+   0035c430(gnx)→0035bdf0(gnx)→0035c430 — the col-58 type-17 gate at
+   (-320,640) and the player (col 2) cross-linked; #49 (player split copy,
+   fl 0x16) points into the pair. EIP spins in the `draw_entity`
+   (0x401540) candidate scan (`for (p = head, prev = &head; p != NULL;)`,
+   following `p->gnext`). The cycle forms during the render frame; merge
+   (0x401a60) and pass 3 (0x401060) were re-audited and match the
+   decompilation; prime suspect is the same flag-4/rect-cache area (pass 2
+   bbox copy uses cached-rect-or-computed depending on flag 4) — or the
+   draw-entity unlink bookkeeping (`prev = pl` after a flag-2 unlink points
+   at a dead slot; a later `*best_link = best->gnext` can then write a
+   dead slot and fail to unlink, and a flag-2 chain of dead-`prev` writes
+   can reorder stale links).
+
+**Tie-breaker recorded:** 0x401162 is `test %al,%bl` (bl = 0x10, al = new
+flags) — the pass-2 bbox/gnext reset runs when the NEW flags carry 0x10
+(vis OR sticky-0x10), NOT vis-only. The decompiled FUN_00401060.c
+misattributes that condition to the overlap return; the raw disasm is
+authoritative and the rebuild already implements it correctly.
