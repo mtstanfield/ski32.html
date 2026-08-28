@@ -20,7 +20,8 @@ def u32(a): return struct.unpack("<I", rd(a, 4))[0]
 
 print(f"tick={u32(0x40c698)} cam_y={u16(0x40c5f2)} view={u16(0x40c5fc)} "
       f"c684={u16(0x40c684)} c68c={u16(0x40c68c)} area={u32(0x40c6fc)} "
-      f"desc_n={u32(0x40c702)} c5d8={i16(0x40c5d8)} c714={i16(0x40c714)}")
+      f"desc_n={u32(0x40c702)} c5d8={i16(0x40c5d8)} c714={i16(0x40c714)} "
+      f"rng={u32(0x40c16c):#010x}")
 print(f"player c64c={u32(0x40c64c):#x} c72c={u32(0x40c72c):#x} "
       f"freelist c744={u32(0x40c744):#x}")
 
@@ -28,10 +29,12 @@ POOL = 0x40c648
 NSLOT = 100
 
 def ent_line(e, idx):
-    return (f"  #{idx:3d} {e:#08x} next={u32(e):#08x} desc={u32(e+0xc):#08x} "
+    return (f"  #{idx:3d} {e:#08x} next={u32(e):#08x} gn={u32(e+0x8):#08x} "
+            f"pt={u32(e+0x4):#08x} desc={u32(e+0xc):#08x} "
             f"col={u16(e+0x10)} type={u16(e+0x18)} fr={u16(e+0x1c):#04x} "
             f"x={i16(e+0x40)} y={i16(e+0x42)} mode={u16(e+0x44)} "
-            f"steer={i16(e+0x46)} speed={i16(e+0x48)} fl={u32(e+0x4c):#08x}")
+            f"steer={i16(e+0x46)} speed={i16(e+0x48)} fl={u32(e+0x4c):#08x} "
+            f"rect=[{i16(e+0x20)},{i16(e+0x24)},{i16(e+0x28)},{i16(e+0x2c)}]")
 
 print("== entity list (c618) ==")
 e = u32(0x40c618)

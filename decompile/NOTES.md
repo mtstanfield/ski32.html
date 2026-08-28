@@ -1692,3 +1692,55 @@ All `ski_dbg_*` trace functions, call sites, and the `<stdarg.h>` include
 added for T12 debugging were removed before commit. Only the permanent
 `g_ski_tick` tick-dump probe (ski_tick) and the wproc trace (ski_win.c)
 remain under `#if SKI_HARNESS`.
+
+## T11 physics divergence fix (Main option (a) — no guards)
+
+**Root cause: `ski_anim_update` (0x403430) multiplier bug.** The shared
+speed/steer easing transcribed the 16-bit multiplier as the entity **frame**
+(`+0x1c`) when the row sign field was non-zero. The disasm says otherwise:
+at 0x403487 `mov %eax,0x10(%esp)` stores the zero-extended **row[8] (sign
+field)** — the frame at `+0x1c` is loaded at 0x403467 *only* for the
+`frame == row->fidx` assert (0x7a1). So when `sign = -1` (0xffff) the
+multiplier is 65535, which in 16-bit arithmetic acts as **-1**:
+`(int16_t)(65535 * x) == -x`. The frame-based version instead produced a
+positive multiplier, so the rebuild's steer went **right** while the
+original's went **left** — the entire descent trajectory diverged, the
+rebuild never hit the same tree, and the skier survived past the original's
+crash point into the gnext-cycle region.
+
+**Fix (src/ski_core.c `ski_anim_update`):**
+```c
+if (sgn != 0)
+    step = (int32_t)(uint32_t)(uint16_t)row->sign;  /* was: frame load */
+```
+The win field is sign-extended (`movswl 0x6`, 0x4034bb) and the speed clamp
+were already correct.
+
+**Verification (same-seed 0x123456, aligned menu-tick count, N=100).**
+Differential tooling: `tools/orig_tick.py` (root /proc/mem; counts menu
+ticks as distinct c16c values — the menu calls rand() exactly once per tick
+— sends KP_1 after exactly N, captures one sample per c698) and the
+permanent `ski_dbg_state_dump` (rebuild, /tmp/rebuild_state, one line per
+tick). Sending KP_1 at rebuild dump line N+1 / the original's Nth c16c
+change aligns the RNG at the descent start (one-tick WM_KEYDOWN offset).
+
+With the fix, aligned at the descent start (c16c `78cb2c21` at py=1 on
+both sides), the rebuild matches the original **exactly** at every common
+py through py=114: c16c (r), entity count (n), player x (px), steer (st),
+speed (sp), frame (fr) all identical (e.g. py=10 r=a484766c px=-2; py=114
+r=94ac5ff9 n=13 px=-48). The steer is now correctly negative (leftward) on
+both sides. **A second, smaller divergence appears at py=126** (c16c still
+matches, `d06e271c`, but n=13 vs 14 — the rebuild keeps one extra
+in-list entity); the world then drifts (rebuild hangs in the gnext cycle
+at py~630; the original for this seed crashes at py=1581 / Dist ~99m). The
+py=126 residual is a single-entity reap/cull discrepancy that has not been
+isolated; it is a *second* bug, not a regression from the steer fix (which
+is confirmed correct by the py≤114 exact match). Flag 8 is only ever set by
+`ski_entity_die` (out-of-list only) — so the residual is not a die() call
+miss; it is in the collision→set-frame/spawn interplay and needs a
+full-entity-list diff (SKI_DBG_FULL) to pin down.
+
+**Ship note:** the steer fix is a genuine disasm-verified transcription bug
+fix (player trajectory + RNG match through py=114). The residual py=126
+one-entity difference means the full crash point is not yet bit-identical;
+left open for a follow-up full-list diff rather than looped verification.

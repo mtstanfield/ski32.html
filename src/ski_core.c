@@ -1676,11 +1676,14 @@ void ski_style_gs(ski_ent_t *e, short x_prev, short y_prev)
 
 /* --- entity animation --------------------------------------------------- */
 
-/* 0x403430 — shared speed/steer easing. Disasm-verified: when row[8] != 0
- * the multiplier is the entity's FRAME (0x403467 loads the DWORD at +0x1c
- * into eax; 0x403487 stores eax as the multiplier); when row[8] == 0 it is
- * signum(steer) (0x40348d test; jge/setg: -1 if steer < 0, 1 if steer > 0,
- * else 0). X = multiplier * steer (0x4034ac imul, sign-extended steer). */
+/* 0x403430 — shared speed/steer easing. Disasm-verified: when row[8] (the
+ * sign field) != 0 the multiplier IS that field, zero-extended (0x403487
+ * mov %eax,0x10(%esp) with eax = zero-extended row[8]) — so sign = -1
+ * (0xffff) yields multiplier 65535, which acts as -1 in 16-bit (65535*x
+ * truncated to i16 = -x). When row[8] == 0 the multiplier is signum(steer)
+ * (0x40348d test; jge/setg: -1 if steer < 0, 1 if steer > 0, else 0).
+ * X = multiplier * steer (0x4034ac imul); win is sign-extended (movswl
+ * 0x6, 0x4034bb). (0x403467 loads +0x1c only for the frame==fidx assert.) */
 ski_ent_t *ski_anim_update(ski_ent_t *e, const ski_anim_row_t *row)
 {
     int32_t st = (int32_t)(int16_t)e->steer;
@@ -1690,7 +1693,7 @@ ski_ent_t *ski_anim_update(ski_ent_t *e, const ski_anim_row_t *row)
     if (row == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0x7a0);
     if (e->frame != row->fidx) ski_assert_fail(SKI_ASSERT_FILE, 0x7a1);
     if (sgn != 0)
-        step = (int32_t)(uint32_t)*(const uint32_t *)((const uint8_t *)e + 0x1c); /* frame | pad word */
+        step = (int32_t)(uint32_t)(uint16_t)row->sign; /* sign zero-extended: 0xffff acts as -1 in i16 */
     else if (st < 0)
         step = -1;
     else
@@ -2224,10 +2227,69 @@ void ski_level_layout(void)
 
 /* --- per-tick update ----------------------------------------------------- */
 
+#if SKI_HARNESS
+/* T13/T14 differential dump (permanent harness infra). At physics entry,
+ * every tick, append a compact one-line state to /tmp/rebuild_state. Field
+ * order matches tools/poll_state.py so the two streams align by player y
+ * (the alignment key; y is monotonic during descent). Set SKI_DBG_FULL=1 to
+ * also dump the full entity list (gnext/partner/rect) each tick for
+ * fine-grained divergence analysis. */
+static void ski_dbg_state_dump(void)
+{
+    static FILE *fs;
+    static int full;
+    static int full_init;
+    const ski_ent_t *pl = (const ski_ent_t *)g_c72c;
+    if (!full_init) {
+        full = (getenv("SKI_DBG_FULL") != NULL) ? 1 : 0;
+        full_init = 1;
+    }
+    int n = 0;
+    for (const ski_ent_t *e = (const ski_ent_t *)g_c618; e != NULL && n < 500;
+         e = e->next)
+        n++;
+    if (!fs)
+        fs = fopen("/tmp/rebuild_state", "w");
+    if (!fs)
+        return;
+    fprintf(fs, "py=%d t=%u r=%08x px=%d st=%d sp=%d md=%u fl=%08x fr=%u "
+                "n=%d cy=%u cx=%u\n",
+            pl ? (int)(int16_t)pl->y : -1, (unsigned)g_c698, (unsigned)g_c16c,
+            pl ? (int)(int16_t)pl->x : -1,
+            pl ? (int)(int16_t)pl->steer : 0,
+            pl ? (int)(int16_t)pl->speed : 0,
+            pl ? (unsigned)(int16_t)pl->mode : 0,
+            pl ? (unsigned)pl->flags : 0,
+            pl ? (unsigned)(int16_t)pl->frame : 0,
+            n, (unsigned)(uint16_t)g_c5f2, (unsigned)(uint16_t)g_c640);
+    if (full) {
+        int i = 0;
+        for (const ski_ent_t *e = (const ski_ent_t *)g_c618;
+             e != NULL && i < 500; e = e->next, i++)
+            fprintf(fs,
+                    "  #%-3d %08lx gn=%08lx pt=%08lx desc=%08lx col=%u "
+                    "type=%u fr=%04x x=%d y=%d mode=%u steer=%d speed=%d "
+                    "fl=%08x rect=[%d,%d,%d,%d]\n",
+                    i, (unsigned long)(uintptr_t)e,
+                    (unsigned long)(uintptr_t)e->gnext,
+                    (unsigned long)(uintptr_t)e->partner,
+                    (unsigned long)(uintptr_t)e->desc, e->col, e->type,
+                    (unsigned)e->frame, (int)(int16_t)e->x, (int)(int16_t)e->y,
+                    (unsigned)(int16_t)e->mode, (int)(int16_t)e->steer,
+                    (int)(int16_t)e->speed, (unsigned)e->flags, e->rect[0],
+                    e->rect[1], e->rect[2], e->rect[3]);
+    }
+    fflush(fs);
+}
+#endif
+
 /* 0x401e50 — physics pass. c5d8/c714 arithmetic is 16-bit throughout
  * (movw/addw; u16 stores zero the high word), reproduced with u16 wraps. */
 void ski_game_physics(void)
 {
+#if SKI_HARNESS
+    ski_dbg_state_dump();
+#endif
     g_c714 = (uint32_t)(uint16_t)((uint16_t)g_c714 - (uint16_t)g_c640);
     g_c5d8 = (uint32_t)(uint16_t)((uint16_t)g_c5d8 - (uint16_t)g_c5f2);
 
