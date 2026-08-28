@@ -1471,9 +1471,13 @@ each item re-verified against disasm/decompile before touching code:
   0x000a at 0x40a3b4). param_1 = mouseX - center X, param_2 = mouseY -
   center Y — no cross-swap (see corrected mouse-aim entry; the interim
   "caller axis-swap fix" was reverted by the controller).
-- **AN1 (anim multiplier) — applied.** 0x403467 loads the DWORD at +0x1c
-  (frame|pad): multiplier = e->frame when row[8] != 0, else signum(steer)
-  (jge/setg: -1 if steer<0, 1 if steer>0, 0 otherwise).
+- **AN1 (anim multiplier) — applied, then SUPERSEDED (see "T11 physics
+  fix", commit 8d1991a).** The "frame when row[8] != 0" reading was wrong
+  (spec reviewer + both T11 passes): disasm 0x403487 stores the
+  zero-extended SIGN field (row[8]) as the multiplier — multiplier =
+  row[8] (e.g. -1) when nonzero, else signum(steer) (jge/setg). The frame
+  load at 0x403467 is only for the frame==fidx assert. The steer direction
+  (negative = left drift) is what the 140m crash depends on.
 - **L1 — banner y += c5f2** at all three sites (0x404bbe/0x404d29/0x404e99);
   c5f2 is zeroed by game_reset so this is latent, but faithful.
 - **L2 — SS gate loop x**: b=1 -> -496 (0xffffffa0 + 0xfffffe70 wraps to
