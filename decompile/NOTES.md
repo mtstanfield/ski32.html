@@ -1988,3 +1988,85 @@ frames), input timing exact (frame_0100 = last pre-injection idle
 frame for a word[100] facing1 — 0 px vs frame_0099; motion from
 frame_0101). `harness/run_scenario.sh s02_start` runs 421 frames to
 completion with no stall.
+
+## T13/T14 differential verification + environment incident (2026-08-29)
+
+### Fire-boundary semantics (verified 2026-08-29)
+The reference original stream (`/tmp/orig_r1.log`, Aug 28 06:56) descends
+from a KP_1 whose WM_KEYDOWN landed between two menu ticks:
+- **last menu sample**: `r=0x12e83c69 fr=3` (sample 98 of that stream) —
+  this value is the deterministic menu-orbit boundary (seed 0x00123456,
+  ~1 rand() per menu tick).
+- **descent tick 1**: `r=0x69780dfd fr=1` (sample 100 — sample 99 is the
+  keydown's tick boundary).
+- **Original side**: fire xdotool KP_1 when the polled menu c16c equals
+  **0x12e83c69** (`tools/orig_tick.py <pid> 12e83c69 ...`).
+- **Rebuild side**: autonomous in-process fire at the same boundary
+  (`SKI_ALIGN_C16C=0x69780dfd` → `ski_harness_maybe_fire` overwrites c16c
+  with the reference keydown-time value). No external key needed.
+- 0x69780dfd is a DESCENT-orbit value (never seen in the menu) — firing
+  the original on it never triggers (verified: 100 s menu, no hit).
+
+### Fresh rebuild vs reference original — FULL PARITY (2026-08-29)
+Binary: `build-native-harness/ski.exe` rebuilt from the current tree
+(SKI_DBG_FULL=1, SKI_ALIGN_C16C=0x69780dfd), 1927-tick descent stream
+(`/tmp/rebuild_state`) vs reference original (10400 ticks, full descent +
+crash at +320 + post-crash). Aligned at first fr=1 (orig sample 100,
+rebuild sample 467).
+- **Summary fields (py, r, px, st, sp, md, fl, fr, n, cy, cx): identical
+  at every tick** except 10 ticks:
+  - 7 transient `n` spikes (original 22→33/24→39/... one tick only,
+    +36/+74/+91/+142/+159/+227/+232): the /proc poller snapshots mid-tick
+    and catches entities allocated during physics before pass-5 reap;
+    count reconverges next tick, c16c/py/px unaffected.
+  - 3 c16c phase skews (+627/+691/+1286): original snapshot 3–4 LCG steps
+    AHEAD on the **same orbit** (O→R distance 4/3/3, R→O unreachable) —
+    the poller caught mid-tick after 3–4 more rand() calls. Same orbit =
+    same cumulative rand() count = zero RNG divergence.
+- **Entities: 0 unpaired (core = col/type/fr/x/y/mode/steer/speed/rect)
+  across the entire stream.** The 90/90 O-only/R-only fingerprints are
+  fl-only 0x04 observation-phase skew (self-converging, known artifact).
+- Verdict: the current tree reproduces the verified M2 behavior exactly;
+  the session-start "328/346 c16c" state is improved to 400/400 + 0 real
+  diffs after the environment incident forced a clean rebuild.
+
+### PE layout fact (stub placement)
+ski32.exe has **no .bss**: .text 0x401000 (vsize 0x86ac, raw to 0x9000),
+.rdata 0x40a000, .data 0x40c000 (0xcdc), .rsrc 0x40d000–0x41C8C0
+(READONLY). Hand-rolled asm stubs must NOT be placed in .rsrc
+(file 0xd8f0 is resource data, mapped read-only). The T14 tick hook
+therefore lives in the .text raw tail at **0x96ac** with the .text
+VirtualSize grown 0x86ac→0x9000 so the loader commits it
+(`harness/stub_patch.py`). The stub VirtualAllocs its own state page at
+first tick; only 8 home-pointer bytes live in .data (0x40c284/0x40c288,
+verified-dead block). IAT slot overrides (e.g. GetTickCount) are
+possible but not needed for state diffs and have no legal code home
+without also editing section characteristics — deferred.
+
+### Committed tooling (this session)
+- `harness/run_diff_pair.sh` — original+rebuild pair runner on :99
+  (both sides focus-independent via je→nop / SKI_HARNESS parity).
+- `tools/diff_streams.py` — aligned tick-by-tick stream diff (summary +
+  entity core fingerprints; fl/pointer/t= excluded).
+- `harness/stub_patch.py` + `harness/stub/orig_stub.{asm,bin}` — T14
+  original-side instrumented binary builder (seed + tick hook +
+  pause-bypass). Regenerable: `python3 harness/stub_patch.py OUT`.
+
+### Environment incident (2026-08-29 ~03:20–03:40) — UNRESOLVED
+- Untracked files from the prior session vanished (original/ski32_fixed*.exe,
+  harness/launch_original_seed.sh, harness/seed_patch_fixed.py); in-flight
+  edits to src/ski_win.c reverted to HEAD+T14-parity; /tmp partially rolled
+  back (00:30 file replaced a 03:10 file). Tracked content + this
+  session's writes survived. Cause unknown; everything above is now
+  regenerable from the repo.
+- From ~03:37, **wine 32-bit SetTimer callbacks stopped being delivered**
+  (control test: plain Win32 SetTimer 40 ms → 0 callbacks in 3 s; a
+  rebuild ski.exe that was ticking at 03:36 froze after ~10 s).
+  Xvfb :99 + wineserver restart did not help. Orphaned
+  winedevice.exe processes (dating to Aug 25) respawn continuously from
+  an external source (PIDs climb seconds after pkill; no root access to
+  identify the respawner). **Next session: restart the host X/wine stack
+  (or use a fresh container) before any T14 frame-capture run.**
+  The stubbed binary itself is validated only up to launch (window +
+  activation + init OK; first tick could not be observed because of the
+  timer outage).

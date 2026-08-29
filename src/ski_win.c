@@ -140,7 +140,17 @@ void ski_resume(void)
 
 void ski_pause_auto(void)
 {
+#if SKI_HARNESS
+    /* T14 parity: the instrumented original is patched at 0x405a17
+     * (je -> 2 nop) so resume is driven ONLY by !c770 (minimize) —
+     * the wineserver foreground/activation state under Xvfb is racy
+     * and would intermittently freeze either side of the diff.
+     * Deactivation (c694) no longer pauses; minimize still does.
+     * Production (flag off) keeps the faithful c694 && !c770. */
+    if (g_c770 == 0) {
+#else
     if (g_c694 != 0 && g_c770 == 0) {
+#endif
         g_c67c = 1;
         ski_resume();
         return;
