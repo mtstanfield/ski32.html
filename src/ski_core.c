@@ -418,9 +418,8 @@ void ski_snd_play(ski_sound_t *p)
 
 /* a1ac: frame -> sprite column, 264 x u16 (frames 0..0x107 = 263), extracted
  * byte-for-byte from the original .rdata (file offset 0xa1ac, 528B). The
- * original indexes it as *(u16*)(0x40a1ac + 2*frame) with NO bounds check,
- * so out-of-range frames (e.g. the 0x103 aim tail) read the same garbage
- * the original reads: frame 0x103 -> col 0x0000 (PE .rdata 0x40a3b2). */
+ * original indexes it as *(u16*)(0x40a1ac + 2*frame) with NO bounds check;
+ * 264 entries cover indices 0..0x107 (the largest frame ever produced). */
 static const uint16_t ski_frame_col[264] = {
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
     17, 18, 19, 20, 21, 22, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37,
@@ -623,23 +622,23 @@ ski_ent_t *ski_entity_new_col(int type, uint16_t col)
     return e;
 }
 
-/* 0x402120 */
+/* 0x402120 — raw bytes verified (0x40214d-0x40217b): set_col FIRST, then a
+ * DWORD store of the frame into the ORIGINAL (pre-split) entity pointer
+ * (0x402175 `mov %esi,0x1c(%edi)` — also zeroes the +0x1e high word).
+ * ski_frame_col is indexed unguarded, as in the original. */
 ski_ent_t *ski_set_frame(ski_ent_t *e, uint32_t frame)
 {
+    ski_ent_t *orig;
     if (e == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0x43c);
     if (frame >= 0x40)
         ski_assert_fail(SKI_ASSERT_FILE, 0x43d); /* fires BEFORE the change-check */
-    if (e->frame != frame) {
-        uint32_t c;
-        if (frame >= 0x40) {
-            ski_assert_fail(SKI_ASSERT_FILE, 0x440);
-            c = 0;
-        } else {
-            c = ski_frame_col[frame];
-        }
-        e->frame = (uint16_t)frame;
-        e = ski_entity_set_col(e, (uint16_t)c);
-    }
+    if (e->frame == frame)
+        return e;
+    if (frame >= 0x40)
+        ski_assert_fail(SKI_ASSERT_FILE, 0x440);
+    orig = e;
+    e = ski_entity_set_col(e, (uint16_t)ski_frame_col[frame]);
+    *(uint32_t *)&orig->frame = frame; /* 0x402175, dword into original pointer */
     return e;
 }
 
@@ -2594,19 +2593,21 @@ void ski_size_hook(short cx, short cy)
     g_c704 = (uint16_t)cx;
 }
 
-/* 0x4065e0 — facing pose from the aim vector. Disasm-verified:
- * r = idiv(dy * 4, dx) (truncating); negative ladder is INCLUSIVE
- * (cmp;jg: return at <=): r<=-12->0, r<=-6->1, r<=-3->2, r<=-1->3;
- * positive: r>=12->0, r>=6->4, r>=3->5, r>=1->6; dy>0 && dx==0 -> 0
- * (0x4065e5-0x4065ec); tail (dy<=0 or r==0): dx>=0 -> 6, dx<0 -> 0x103.
- * 0x103 (259) is an ORIGINAL BUG — an out-of-range frame that flows into
- * ski_set_frame (soft asserts 0x43d/0x440) and reads the frame-col table at
- * a1ac + 2*0x103. Reproduced faithfully (strict 1:1 bar). */
+/* 0x4065e0 — facing pose from the aim vector. Raw-bytes verified
+ * (0x4065e0-0x406663): r = idiv(dy * 4, dx) (signed, truncating);
+ * comparisons are SIGNED 16-bit (cmp $0xfff4,%ax; jg): r<=-12->0,
+ * r<=-6->1, r<=-3->2, r<=-1->3, r>=12->0, r>=6->4, r>=3->5, r>=1->6;
+ * dy>0 && dx==0 -> 0; tail (dy<=0 or r==0): dx>=0 -> 6, dx<0 -> 5.
+ * Tail 0x406655-0x406663 is `xor eax; test dx; setge al; dec eax (32-bit);
+ * and $0xfd,al; add $6,eax (32-bit)` — the dx<0 path computes
+ * 0xFFFFFFFD + 6 = 5 (NOT 0x103; an earlier 16-bit mis-decode of the
+ * add produced the phantom 0x103 "original quirk" that caused spurious
+ * set_frame asserts "ski2.c line 1085" in the rebuild only). */
 uint32_t ski_aim_facing(short dx, short dy)
 {
     int32_t r;
     /* Caller 0x406587-0x40659a: dx = mouseX - c704.lo (center X),
-     * dy = mouseY - c5fc.lo (center Y). No axis swap.
+     * dy = mouseY - c5fc.lo (Y reference). No axis swap.
      * 0x4065e0: test dy; jle tail; test dx; ==0 -> 0; r = idiv(dy*4, dx). */
     if (dy > 0) {
         if (dx == 0)
@@ -2621,10 +2622,7 @@ uint32_t ski_aim_facing(short dx, short dy)
         if (r >= 3) return 5;
         if (r >= 1) return 6;
     }
-    /* 0x406655: test dx; setge; dec; and $0xfd; add $6 -> dx>=0 -> 6,
-     * dx<0 -> 0x103 (out-of-range frame; original quirk; .rdata
-     * ski_frame_col[0x103] = u16 @ 0x40a3b2 = 0x0000). */
-    return dx >= 0 ? 6 : 0x103;
+    return dx >= 0 ? 6 : 5;
 }
 
 /* 0x406670 — crouch pose 0xd..0x10 from the aim vector (dx, dy as above). */

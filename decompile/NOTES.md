@@ -1424,9 +1424,14 @@ on Left, steering works, descent is stable at ~25 ticks/s.
   (x - c704, y - c5fc) was already faithful). `ski_aim_facing(dx, dy)` /
   `ski_aim_crouch(dx, dy)` take (dx = mouseX - center X, dy = mouseY -
   center Y); facing: ladder iff dy>0 && dx!=0, r = idiv(dy*4, dx), tail
-  0x406655 `test dx; setge; dec; and $0xfd; add $6` -> dx>=0 -> 6, dx<0 ->
-  0x103 (out-of-range frame, original quirk; ski_frame_col[0x103] =
-  u16 @ 0x40a3b2 = 0x0000 — the 0x000a is at 0x40a3b4, two bytes later).
+  0x406655 `xor eax; test dx; setge al; dec eax (32-bit); and $0xfd,al;
+  add $6,eax (32-bit)` -> dx>=0 -> 6, dx<0 -> **5** (0xFFFFFFFD + 6).
+  CORRECTED 2026-08-29: the earlier "dx<0 -> 0x103 out-of-range quirk"
+  was an 8-bit misread of the 32-bit add (same failure mode as the P5
+  0x10E misread); it caused the rebuild's spurious "ski2.c line 1085"
+  asserts (set_frame 0x43d) on upper-left mouse aim. Live-verified on the
+  original under Wine 2026-08-29: UL mouse aim (dx<0, dy<=0) yields
+  facing frames in 0..6, never >= 0x40, no assert box.
 
 ### Spec-review fixes (post-commit ef40b3d, 2026-08-27)
 
@@ -1464,13 +1469,15 @@ each item re-verified against disasm/decompile before touching code:
 - **AIM1 — applied + register-mapping corrected this turn.** Ladder
   boundaries disasm-verified via jg/jl at 0x4065fb-0x40664d (inclusive
   r<=-12/-6/-3/-1 and r>=12/6/3/1); r==0 falls through to the tail (the
-  `jl 0x406655` at 0x40664d — no ret-6). The 0x103 tail is an ORIGINAL
-  out-of-range-frame quirk, gated on CX<0 (0x406655-0x406663:
-  `test dx; setge; dec; and $0xfd; add $6`); ski_frame_col[0x103] =
-  u16 @ 0x40a3b2 = 0x0000 from the .rdata table (a 2-byte-off read gives
-  0x000a at 0x40a3b4). param_1 = mouseX - center X, param_2 = mouseY -
-  center Y — no cross-swap (see corrected mouse-aim entry; the interim
-  "caller axis-swap fix" was reverted by the controller).
+  `jl 0x406655` at 0x40664d — no ret-6). CORRECTED 2026-08-29: the tail
+  (0x406655-0x406663: `xor eax; test dx; setge al; dec eax; and $0xfd,al;
+  add $6,eax` — all 32-bit ops) returns dx>=0 -> 6, dx<0 -> **5**
+  (0xFFFFFFFD + 6 = 5); the earlier "0x103 out-of-range-frame quirk"
+  was an 8-bit misread of the 32-bit add and is RETRACTED (it produced
+  the rebuild-only "ski2.c line 1085" asserts on upper-left mouse aim;
+  see the corrected mouse-aim entry above). param_1 = mouseX - center X,
+  param_2 = mouseY - center Y — no cross-swap (the interim "caller
+  axis-swap fix" was reverted by the controller).
 - **AN1 (anim multiplier) — applied, then SUPERSEDED (see "T11 physics
   fix", commit 8d1991a).** The "frame when row[8] != 0" reading was wrong
   (spec reviewer + both T11 passes): disasm 0x403487 stores the

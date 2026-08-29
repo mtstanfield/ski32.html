@@ -302,7 +302,7 @@ void ski_size_hook(short cx, short cy); /* 0x406060 */
  * param_2 = DX reg = mouseY - c5fc (window-center Y); caller 0x406550 loads
  * both raw mouse coords first (disasm 0x406587-0x40659a: subtrahends match
  * axes — no cross-swap). */
-uint32_t ski_aim_facing(short dx, short dy); /* 0x4065e0; dx = mouseX - center X, dy = mouseY - center Y; frames 0-6 (+0x103 tail) */
+uint32_t ski_aim_facing(short dx, short dy); /* 0x4065e0; dx = mouseX - center X, dy = mouseY - Y ref (c5fc); frames 0-6 */
 uint32_t ski_aim_crouch(short dx, short dy); /* 0x406670; same dx/dy; crouch frames 0xd-0x10 */
 int ski_rand(void); /* 0x406cda MSVC CRT LCG */
 void ski_rand_seed(uint32_t seed); /* 0x406cd0 */
