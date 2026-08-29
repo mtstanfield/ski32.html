@@ -39,21 +39,34 @@ SUM_KEYS = ('py', 'r', 'px', 'st', 'sp', 'md', 'fl', 'fr', 'n', 'cy', 'cx')
 
 def main():
     o = parse(sys.argv[1]); r = parse(sys.argv[2])
-    def first_fr1(samples):
+    def first_sp(samples):
         for i, s in enumerate(samples):
-            if kv(s['s']).get('fr') == '1':
+            if int(kv(s['s']).get('sp', '0') or 0) > 0:
                 return i
         return None
-    io, ir = first_fr1(o), first_fr1(r)
+    io, ir = first_sp(o), first_sp(r)
     if io is None or ir is None:
-        print(f"no fr=1 found (orig={io}, rebuild={ir})"); return 2
+        print(f"no sp>0 sample found (orig={io}, rebuild={ir})"); return 2
     print(f"align: orig sample {io}, rebuild sample {ir}")
+    def lcg(x):
+        return (x * 0x343fd + 0x269ec3) & 0x7fffffff
+    def orbit_dist(a, b, max_steps=16):
+        # LCG steps forward from a to reach b (or -1)
+        v = a
+        for k in range(max_steps + 1):
+            if v == b:
+                return k
+            v = lcg(v)
+        return -1
     rmatch = c16c_eq = 0
     first_diff = None
     for i in range(min(len(o) - io, len(r) - ir)):
         so, sr = o[io + i], r[ir + i]
         ko, kr = kv(so['s']), kv(sr['s'])
+        rdist = orbit_dist(int(ko['r'], 16), int(kr['r'], 16))
         sdiff = {k: (ko[k], kr[k]) for k in SUM_KEYS if ko.get(k) != kr.get(k)}
+        if 'r' in sdiff and rdist != -1:
+            del sdiff['r']  # same orbit, sub-tick observation phase
         eoff = []
         no, nr = so['e'], sr['e']
         for j in range(max(len(no), len(nr))):

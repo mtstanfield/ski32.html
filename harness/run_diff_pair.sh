@@ -19,13 +19,16 @@
 SECS="${1:-100}"
 cd "$(dirname "$0")/.."
 pkill -f 'ski32_fixed_seed\.exe' 2>/dev/null
-pkill -f 'ski\.exe$' 2>/dev/null
+pkill -f 'ski\.exe' 2>/dev/null
 sleep 1
 rm -f /tmp/rebuild_state /tmp/orig_r2.log
 
+# NOTE: direct `wine foo.exe` is broken in this environment
+# ("ShellExecuteEx failed: File not found" — prefix launcher corruption);
+# launch through wine cmd.
 echo "[1/4] launching original"
 DISPLAY=:99 WINEPREFIX="$HOME/.wine-ski" WINEDEBUG=-all \
-  wine original/ski32_fixed_seed.exe >/tmp/ski-orig-boot.log 2>&1 &
+  wine cmd /c "start z:\\$PWD\\original\\ski32_fixed_seed.exe" >/tmp/ski-orig-boot.log 2>&1 &
 OPARENT=$!
 OPID=""
 for i in $(seq 1 30); do
@@ -43,11 +46,11 @@ NS=$(grep -c '^py=' /tmp/orig_r2.log 2>/dev/null || echo 0)
 echo "  orig samples after 4s: $NS (must be >0)"
 echo "[3/4] launching rebuild (in-process fire at same boundary)"
 DISPLAY=:99 SKI_DBG_FULL=1 SKI_ALIGN_C16C=0x69780dfd WINEDEBUG=-all \
-  wine build-native-harness/ski.exe >/tmp/ski-reb-boot.log 2>&1 &
+  wine cmd /c "start z:\\$PWD\\build-native-harness\\ski.exe" >/tmp/ski-reb-boot.log 2>&1 &
 RPARENT=$!
 RPID=""
 for i in $(seq 1 30); do
-  RPID=$(pgrep -f 'build-native-harness/ski\.exe' | head -1)
+  RPID=$(pgrep -f 'build-native-harness[\\/]ski\.exe' | head -1)
   [ -n "$RPID" ] && break
   sleep 1
 done
@@ -60,6 +63,6 @@ echo "[4/4] running $SECS s"
 wait "$OT" || true
 kill "$OPARENT" "$RPARENT" 2>/dev/null
 pkill -f 'ski32_fixed_seed\.exe' 2>/dev/null
-pkill -f 'build-native-harness/ski\.exe' 2>/dev/null
+pkill -f 'build-native-harness[\\/]ski\.exe' 2>/dev/null
 echo "done: orig_r2=$(grep -c '^py=' /tmp/orig_r2.log) rebuild=$(grep -c '^py=' /tmp/rebuild_state)"
 cat /tmp/orig_tick_out.log

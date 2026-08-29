@@ -277,14 +277,17 @@ static void ski_key_down(uint32_t vk)
     if (frame == 0xb || frame == 0x11)
         return; /* frozen frames: no state change (tail compares equal) */
 
-    /* Second switch (0x406424, idx table 0x40644c, byte-verified):
-     * PageUp/Numpad9 -> 6, PageDown/Numpad3 -> 4, End/Numpad1 -> 1,
-     * Home/Numpad7 -> 3 (all mode-0 only); Left/Numpad4 -> L[] steer;
-     * Up/Numpad8 -> up-table; Right/Numpad6 -> R[] steer; Down/Numpad2
-     * -> down-table; Insert/Numpad0 -> crouch (mode 0); else no-op. */
+    /* Second switch (0x406424, idx table 0x40644c, byte-verified 2026-08-29):
+     * PageUp(0x21) -> 6, PageDown(0x22)/Numpad3 -> 4, End(0x23)/Numpad1 -> 1,
+     * Home(0x24)/Numpad7 -> 3 (all mode-0 only); Left(0x25)/Numpad4 -> L[] steer;
+     * Up(0x26)/Numpad8/Numpad9 -> up-table; Right(0x27)/Numpad6 -> R[] steer;
+     * Down(0x28)/Numpad2 -> down-table; '-'(0x2d)/Insert/Numpad0 -> crouch
+     * (mode 0); Numpad5 and all else no-op.
+     * NOTE: Numpad9 (0x69) is the up-table (JUMP) in the original, not a
+     * facing key — the earlier "1/3/7/9 face" live note was wrong for 9. */
     uint32_t new_frame = frame;
     switch (vk) {
-    case 0x21: case 0x69: /* VK_PRIOR / VK_NUMPAD9 */
+    case 0x21: /* VK_PRIOR (PageUp): facing 6, mode 0 only */
         if (mode == 0)
             new_frame = 6;
         break;
@@ -311,7 +314,7 @@ static void ski_key_down(uint32_t vk)
             ENT16W(g_c72c, ENT_STEER) = steer;
         }
         break;
-    case 0x26: case 0x68: /* VK_UP / VK_NUMPAD8 */
+    case 0x26: case 0x68: case 0x69: /* VK_UP / VK_NUMPAD8 / VK_NUMPAD9 */
         switch (frame) {
         case 3: case 7: case 0xc:
             if (ENT16(g_c72c, ENT_SPEED) == 0) {
