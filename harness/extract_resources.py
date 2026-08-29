@@ -103,7 +103,13 @@ for kind, nid, off, size in entries:
                     byte = raw[row + (x * bpp) // 8]
                     shift = 8 - bpp - (x * bpp) % 8
                     idx = (byte >> shift) & ((1 << bpp) - 1)
-                px[x, y] = tuple(pal[idx])
+                # Windows RGBQUADs are stored (b,g,r,0) in the file; PIL RGB
+                # wants (r,g,b) — swap. (The original renders via GDI which
+                # reads the palette natively; this matches the on-screen
+                # colors — verified 2026-08-29 against a live Wine run where
+                # the chair lifts are red.)
+                p3 = pal[idx]
+                px[x, y] = (p3[2], p3[1], p3[0])
         p = OUT / f"bmp_{nid:03d}.png"
         img.save(p)
         res["bitmaps"][nid] = {"w": w, "h": h, "bpp": bpp, "file": str(p)}
