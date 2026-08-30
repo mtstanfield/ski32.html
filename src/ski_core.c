@@ -1089,10 +1089,25 @@ void ski_gate_type4(ski_gate_desc_t *d)
     }
 }
 
-/* 0x404350 — cruising benches (types 5..8): homing velocity + pose.
+/* 0x404350 — cruising yetis (types 5..8): homing velocity + pose.
  * All thresholds/clamps/both idiv branches disasm-verified (0x404350-0x4046c0).
- * The frame 0x32..0x37 timer block is transcribed 1:1 but unreachable in
- * the original (no code ever sets a cruise frame to 0x32). */
+ * The frame 0x32..0x37 timer block is the KILL/eating "wake-anim": game_collide
+ * (0x403a00 case 5-8, param_2 == c72c) sets desc frame = 0x32 + timestamp = c698
+ * when the yeti kills the player. Frames 0x32..0x37 are time-stepped off
+ * c698 - timestamp (real ms): 0x32->0x33; 0x33->(0x34|0x32)@500; 0x34->0x35@700;
+ * 0x35->0x36@1000; 0x36->0x37; 0x37->(0x2a|0x36)@3000. 0x36/0x37 are the
+ * "picking-its-teeth" pose (cols 80/81); 0x2a is the arms-up idle.
+ * The switch's break cases (0x34/0x35 with dt below threshold) return here:
+ * the original `jle LAB_004046b8` restores d->frame to its incoming value and
+ * returns, skipping the homing block. This is a 1:1 transcription of the
+ * original (0x4043f8 / 0x404413 both target 0x4046b8).
+ * NOTE: the rebuilt binary is still reported (on Windows) to skip the
+ * teeth-picking pose after the eat anim, so this return is necessary but NOT
+ * the (only) cause. The real cause is elsewhere — the eating anim's frame
+ * advances (0x32->0x33->0x34 observed) but jumps to 0x2a before 0x35/0x36/0x37.
+ * Open leads: (a) is ski_gate_cruise actually running for the yeti each tick,
+ * (b) is d->frame the value the renderer reads, (c) does the player-kill path
+ * (ski_entity_die / run-end reset) clobber the yeti's desc before 1000 ms elapse. */
 void ski_gate_cruise(ski_gate_desc_t *d)
 {
     if (d == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0xa68);
@@ -1141,6 +1156,9 @@ void ski_gate_cruise(ski_gate_desc_t *d)
             ski_assert_fail(SKI_ASSERT_FILE, 0xa76);
             return;
         }
+        /* break cases (0x34/0x35 below threshold): frame unchanged. Original
+         * `goto LAB_004046b8` returns here, skipping the homing block. */
+        return;
     } else {
         int reset = 0;
         switch (type) {

@@ -13,10 +13,22 @@ if(EMSCRIPTEN)
   file(GLOB SHIM_SOURCES shim/*.c)
   list(APPEND SKI_SOURCES ${SHIM_SOURCES})
 else()
-  list(APPEND SKI_SOURCES src/resources.rc) # windres: bitmaps + string table
-  # windres resolves bitmap paths relative to CWD; give it the source root.
-  set_source_files_properties(src/resources.rc PROPERTIES
-    COMPILE_FLAGS "--include-dir=${CMAKE_CURRENT_SOURCE_DIR}")
+  # Embed bitmaps + string table. CMake >= 3.14 normally auto-compiles a
+  # .rc in the sources with CMAKE_RC_COMPILER, but this toolchain's CMake
+  # does not detect the RC compiler, so invoke windres explicitly and link
+  # the produced object. windres resolves bitmap paths relative to CWD;
+  # give it the source root so res/bmp_NNN.bmp resolves.
+  set(SKI_RC_OBJ "${CMAKE_CURRENT_BINARY_DIR}/resources.rc.o")
+  add_custom_command(
+    OUTPUT "${SKI_RC_OBJ}"
+    COMMAND "${CMAKE_RC_COMPILER}" --include-dir=${CMAKE_CURRENT_SOURCE_DIR}
+            -O coff -o "${SKI_RC_OBJ}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/resources.rc"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/resources.rc"
+    COMMENT "windres: compiling src/resources.rc -> resources.rc.o"
+    VERBATIM
+  )
+  list(APPEND SKI_SOURCES "${SKI_RC_OBJ}")
 endif()
 add_executable(ski ${SKI_SOURCES})
 if(EMSCRIPTEN)
