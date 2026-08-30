@@ -43,10 +43,29 @@ TIMEOUT=${SKI_TIMEOUT:-$(( TICKS * 6 / 10 + 60 ))}  # 60ms/tick budget + 60s
 wine "$BIN" >/tmp/ski-scen.log 2>&1 &
 WPID=$!
 
+# The game only ticks while its window is ACTIVE. Xvfb usually auto-focuses a
+# lone top-level, but any competing window (or a focus race) leaves it frozen.
+# Activate the 760x734 client window as soon as it appears; re-assert focus
+# periodically in case the wineserver drops it.
+ski_activate() {
+  local id
+  for id in $(xdotool search --name "" 2>/dev/null); do
+    case "$(xdotool getwindowgeometry "$id" 2>/dev/null)" in
+      *760x734*) xdotool windowactivate "$id" 2>/dev/null
+                 xdotool windowfocus "$id" 2>/dev/null
+                 xdotool mousemove --window "$id" 400 400 2>/dev/null
+                 return 0 ;;
+    esac
+  done
+  return 1
+}
+for _ in $(seq 1 40); do ski_activate && break; sleep 0.5; done
+
 LAST=0; STALL=0; T0=$(date +%s)
 while :; do
   NOW=$(date +%s)
   [ $((NOW - T0)) -ge "$TIMEOUT" ] && { echo "TIMEOUT after ${TIMEOUT}s (last frame $LAST/$TICKS)" >&2; break; }
+  ski_activate || true   # keep the window ACTIVE: the game pauses when unfocused
   LATEST=0
   for f in frame_*_main.ppm; do
     [ -e "$f" ] || continue
@@ -56,7 +75,7 @@ while :; do
   if [ "$LATEST" -ge "$TICKS" ]; then echo "done: $LATEST frames" >&2; break; fi
   if [ "$LATEST" -eq "$LAST" ]; then
     STALL=$((STALL + 1))
-    if [ "$STALL" -ge 12 ]; then
+    if [ "$STALL" -ge 40 ]; then
       if ! kill -0 $WPID 2>/dev/null; then
         echo "PROCESS DIED: game exited at frame $LAST/$TICKS" >&2
       else
@@ -67,7 +86,7 @@ while :; do
   else
     LAST=$LATEST; STALL=0
   fi
-  sleep 1
+  sleep 0.3
 done
 
 kill $WPID 2>/dev/null || true

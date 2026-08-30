@@ -5,9 +5,11 @@ Applies, to a COPY of original/ski32.exe (file offset == VA - 0x400000):
   1. the T8 seed-freeze patch (from harness/seed.json)
   2. the T14 tick hook: jmp at 0x1000 -> stub at 0x96ac, stub bytes,
      and the .text VirtualSize grow (so the raw stub tail is loaded).
-     The stub is self-contained: it VirtualAlloc's its own page at the
-     first tick; the only .data footprint is the 8-byte home slots at
-     0x40c284/0x40c288 (verified dead block; must be 0 in file).
+     The stub is self-contained: it LocalAlloc's its own zeroed state
+     block (0x1100 B) at the first tick (a NULL-based VirtualAlloc
+     returns NULL inside this process under wine 9.0); the only .data
+     footprint is the 8-byte home slots at 0x40c284/0x40c288 (verified
+     dead block; must be 0 in file).
   3. pause-auto activation bypass: 0x5a17 "je" -> 2 x nop, so
      game_pause_auto resumes on !c770 (minimize) alone. Under Xvfb the
      wineserver foreground state is racy and a fresh window
