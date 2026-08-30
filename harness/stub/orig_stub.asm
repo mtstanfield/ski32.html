@@ -678,6 +678,11 @@ orig_stub_entry:
     movzx eax, word [ebp+o_bitsld]
     test eax, eax
     jz   .tail0
+    ; word -> esi (callee-saved): wproc_main clobbers eax after the FIRST
+    ; injected key, which zeroed the .bit test operand and silently dropped
+    ; every bit above the lowest set one (only single-bit words survived).
+    ; The caller's esi sits in the pushad frame; popad at .tail0 restores it.
+    mov  esi, eax
     ; VK table (seed.json bit order): left right up down crouch f1 f3 f7 f9 F2 F3 Enter
     mov  dword [esp+16], 0x25
     mov  dword [esp+20], 0x27
@@ -695,7 +700,7 @@ orig_stub_entry:
     mov  edi, 12
     lea  edx, [esp+16]
 .bit:
-    test eax, ecx
+    test esi, ecx
     jz   .nbit
     ; wproc_main is the game's WndProc: stdcall (ret 0x10), clobbers all
     ; caller-saved regs and ebp. Save loop state, recover ebp from HOME1.
@@ -707,7 +712,20 @@ orig_stub_entry:
     push ebx                         ; vk
     push 0x100                       ; WM_KEYDOWN
     push dword [c6c8]                ; hwnd
-    call [wproc_main]                ; stdcall (ret 0x10): esp auto-restored
+    call wproc_main                  ; DIRECT call (E8 rel32) — NOT
+                                     ; `call [wproc_main]`: that encodes an
+                                     ; indirect call THROUGH 0x405800, i.e.
+                                     ; it reads the first 4 code bytes of
+                                     ; WndProc (8b 44 24 08 = 0x0824448b,
+                                     ; inside wine's 0x0182d000-0x20000000
+                                     ; no-access reservation) as the target
+                                     ; -> AV on every key tick. The AV storm
+                                     ; left the instrumented original
+                                     ; effectively
+                                     ; keyless (words degraded to 0 after the
+                                     ; first non-zero word), which masqueraded
+                                     ; as an s03/s05/s08 gameplay divergence.
+                                     ; stdcall (ret 0x10): esp auto-restored
     mov  ebp, [HOME1]                ; wproc clobbers ebp: recover page base
     mov  dword [ebp+o_stage], 12
     mov  ecx, [ebp+o_bitstk]

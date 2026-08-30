@@ -2191,3 +2191,110 @@ confirmed):
 ### Untracked diagnostic probes (left for reuse; not committed)
 - `harness/strprobe/{capprobe,gdtest,gwrtest}.c` — T15 color-capture GDI probes.
 - `tools/{find_child.py,iat_snap.py}` — window/IAT inspection helpers.
+
+## T16 — original-side stub key-injection bug (eax clobber): s05 root cause (2026-08-30)
+
+### Symptom
+After the T15 fixes (stub indirect-call fix, Xvfb 768x768, no-activate mode),
+s03_steering passed 0px but s05_modes still diverged at tick 201 — the 7-key
+word (up,down,crouch,f1,f3,f7,f9, bits 2..8). Pixel-confirmed ground truth
+(terrain scroll per tick, frames 198-209): both sides 12px/tick through 200;
+at 201+ the ORIGINAL kept 12px/tick (no decel) while the REBUILD decayed
+8,8,4,2,0 (crouch braking). The original's player sprite was byte-identical
+bbox/npx 200-208 (carving pose retained). I.e. the original "ignored" the
+whole word; the rebuild applied it.
+
+### Hypotheses ruled out (all disasm-verified)
+- (A) residual mode at tick 201 gating the keys: second-switch entry
+  0x4061b1-0x4061ec loads `mov 0x1c(%eax),%esi` (frame) and
+  `mov 0x44(%eax),%dx` (MODE); every per-case `test %dx,%dx` guard tests
+  MODE. NO flag read in the entry. A full .text scan shows the ONLY store to
+  entity+0x44 is 0x402457 (set_pos tail). Live /proc sample on the
+  ignore-trajectory (py=1185 ~tick 207, fr=1, sp=12): md=0, tr=0, c67c=1.
+  No crouch sprite rendered 200-208. Dead.
+- (B) flag-0x20 gate: the fl=0x35 vs fl=0x15 difference seen in /proc dumps
+  is a SAMPLING-PHASE artifact — bit 0x20 is cleared at physics pass-1 start
+  and set again in the rect-recompute tail (0x402449); a /proc poller samples
+  a different phase than an in-process dump. Dead.
+- c67c gate: live sample shows c67c=1 mid-run; writers are init (0x405356)
+  and ski_pause_auto (0x405a22/=1, 0x405a31/=0), called only from the
+  WM_ACTIVATE cases. Dead as a steady-state cause.
+- Also verified 1:1 while hunting (no bugs): player-update frame switch
+  (idx @0x402b64 / jt @0x402b54: 7,9->3; 8,10->6; 0xb,0xc->keep;
+  0xd..0x15->landing 0x402aab, land table @0x40a434 bytes exact);
+  ski_entity_step 0x402be0 incl. the c670 double-move quirk; WndProc key
+  routing (0x100 -> c67c gate 0x40594d -> 0x406170 -> first switch
+  idx @0x4063bc / jt @0x4063a8; all 7 game VKs -> idx 4 -> 0x4061b1);
+  the mouse-click crouch action 0x4066d0 (WM_LBUTTONDOWN 0x201 /
+  WM_RBUTTONDOWN 0x203 cases, c67c-gated; rebuild already has it as
+  ski_click_action and it is inert in no-activate runs).
+
+### THE BUG — stub .bit loop clobbers the key word
+harness/stub/orig_stub.asm, gate-4 injection loop:
+`movzx eax, word [ebp+o_bitsld]` loads the 16-bit key word into EAX; the
+`.bit` loop saves/restores ecx/edx/edi around the `call wproc_main` but NOT
+eax. wproc_main is the game's stdcall WndProc and clobbers eax. After the
+FIRST set bit is injected, eax holds the WndProc return value (0) -> every
+higher bit tests false -> **only the lowest set bit of each word is
+delivered**. Single-bit words (all of s01/s02/s03/s04/s06/s08) survive
+because the first bit is tested before any clobber — which is exactly why
+s03 passed while s05's 7-key word appeared "ignored" (only UP, bit 2, was
+delivered, and UP is a no-op at frame 1: 1 is not in the up-table's
+switch frames {3,7,0xc,6,8,0xd,0xe,0xf,0x12,0x13}).
+
+### Fix (2 lines)
+- After `movzx eax, word [ebp+o_bitsld]` + `test eax,eax` + `jz .tail0`:
+  insert `mov esi, eax` (word into the callee-saved esi; the caller's esi
+  sits in the pushad frame and is restored by popad at .tail0; nothing
+  between uses esi).
+- `.bit:` loop: `test eax,ecx` -> `test esi,ecx` (TEST is commutative for
+  ZF; nasm emits 85 ce = TEST esi,ecx).
+Bin grew 2165 -> 2167 B; regenerated /tmp/orig_t15.exe via
+`python3 harness/stub_patch.py /tmp/orig_t15.exe`; verified deployed bytes
+== orig_stub.bin (2167 B at file offset 0x96ac, cmp exact).
+
+### Rebuild key-table fixes landed in the same commit (disasm-verified 1:1)
+- VK 0x69 (Numpad9): main idx table @0x40644c maps it to jt[0] = 0x406320
+  = the frame-6 case (mode 0). The rebuild had it in the up-table case.
+  REQUIRED for s05: the word's last key is f9; without the fix the rebuild
+  ends the word at frame 3 (up-table no-op at sp!=0) while the original
+  ends at frame 6.
+- DOWN crouch cycle (mode!=0 sub-table @0x406498): original is
+  0xd -> 0x13, 0x12 -> 0xd, 0x13 -> 0x12; the rebuild had the cycle
+  reversed. (Not exercised by s05 — the word's down key lands at mode 0 —
+  but transcribed 1:1 from the raw table bytes.)
+
+### Verification (SKI_NO_ACTIVATE=1, fixed original /tmp/orig_t15.exe,
+build-native-harness/ski.exe, harness/diff.py tol=0, status-panel mask)
+- s05_modes:      807 frames, 0 failing, worst=0px -> PASS (was 606 failing)
+- s01_menu:       304 frames, 0 failing, worst=0px -> PASS
+- s02_start:      403 frames, 0 failing, worst=0px -> PASS
+- s03_steering:   807 frames, 0 failing, worst=0px -> PASS
+- s04_crouch:     403 frames, 0 failing, worst=0px -> PASS
+- s08_pause_scores: 301 frames, 0 failing, worst=0px -> PASS through the
+  pause. BOTH sides stall identically at frame 300/1200: the t=300 F3 pause
+  stops the game's tick clock, and the stub injects word N at tick N+1, so
+  the t=500 resume word can never be delivered to a paused original (same
+  for the rebuild, whose pause also stops its timer — faithful). This is a
+  harness limitation for pause scenarios, NOT a divergence; everything up to
+  the pause is pixel-identical.
+- s06_longrun:    FAIL (out of scope for T16 acceptance): the ORIGINAL
+  completes 3005/3000, but the REBUILD process dies at 2899/3000
+  (run_scenario: "frames: 2899/3000", exit 1). No diff possible. Not
+  investigated (T16 mandate: report, don't re-diagnose). Pre-existing
+  territory: s06 was never in the s03/s05/s08 acceptance set, and the
+  rebuild binary carries only the two key-table fixes above. Repro:
+  `SKI_NO_ACTIVATE=1 bash harness/run_scenario.sh s06_longrun
+  build-native-harness/ski.exe <dir>`.
+
+### Environment / tooling notes
+- Xvfb :99 MUST be 768x768 (original sizes the window from the screen). It
+  died 3x during this session (restarts: xvfb99b pid 762061, xvfb99c
+  pid 869181, both hub persist procs). A dead Xvfb makes the game exit at
+  frame 0 ("PROCESS DIED: game exited at frame 0/N").
+- Live /proc dumping gotcha: find_child.py can match a STALE hung wine
+  child (frozen c698, 1 line per 55 s of polling). Before any dump:
+  `pkill -f orig_t15; WINEPREFIX=$HOME/.wine-ski wineserver -k`, and verify
+  c698 advances across 3 samples (300 ms apart) before trusting the dump.
+- Disk: ~1.35 GB of PPMs per 800-tick run; delete frame dirs immediately
+  after each diff (the volume hit 100% full twice this session).

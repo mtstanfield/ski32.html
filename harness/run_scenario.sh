@@ -59,13 +59,28 @@ ski_activate() {
   done
   return 1
 }
-for _ in $(seq 1 40); do ski_activate && break; sleep 0.5; done
+# SKI_NO_ACTIVATE=1: skip ALL xdotool activation. With the harness pause
+# bypass (original: 0x5a17 je->nop patch; rebuild: #if SKI_HARNESS in
+# ski_pause_auto) both sides tick without WM_ACTIVATE, and no synthetic
+# mouse events (windowactivate fake-click + mousemove) are injected.
+# Without this, the first mousemove's tick (and any re-activation clicks)
+# land at wall-clock-dependent ticks, so the mouse-driven descent start
+# jitters +/-1 tick between two runs and the frame diff is meaningless
+# (seen 2026-08-30: t15o_fix2 vs t15r_dbg2 aligned only through tick 20).
+# Input is then fully tick-locked via ski_in.bin (e.g. s03's facing1@100
+# starts the descent, as in the no-mouse Run A of the same investigation).
+ACT=1
+[ "${SKI_NO_ACTIVATE:-0}" = "1" ] && ACT=0
+
+if [ "$ACT" = 1 ]; then
+  for _ in $(seq 1 40); do ski_activate && break; sleep 0.5; done
+fi
 
 LAST=0; STALL=0; T0=$(date +%s)
 while :; do
   NOW=$(date +%s)
   [ $((NOW - T0)) -ge "$TIMEOUT" ] && { echo "TIMEOUT after ${TIMEOUT}s (last frame $LAST/$TICKS)" >&2; break; }
-  ski_activate || true   # keep the window ACTIVE: the game pauses when unfocused
+  [ "$ACT" = 1 ] && { ski_activate || true; }   # keep ACTIVE: game pauses when unfocused (unpatched builds only)
   LATEST=0
   for f in frame_*_main.ppm; do
     [ -e "$f" ] || continue

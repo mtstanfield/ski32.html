@@ -277,17 +277,25 @@ static void ski_key_down(uint32_t vk)
     if (frame == 0xb || frame == 0x11)
         return; /* frozen frames: no state change (tail compares equal) */
 
-    /* Second switch (0x406424, idx table 0x40644c, byte-verified 2026-08-29):
-     * PageUp(0x21) -> 6, PageDown(0x22)/Numpad3 -> 4, End(0x23)/Numpad1 -> 1,
-     * Home(0x24)/Numpad7 -> 3 (all mode-0 only); Left(0x25)/Numpad4 -> L[] steer;
-     * Up(0x26)/Numpad8/Numpad9 -> up-table; Right(0x27)/Numpad6 -> R[] steer;
-     * Down(0x28)/Numpad2 -> down-table; '-'(0x2d)/Insert/Numpad0 -> crouch
-     * (mode 0); Numpad5 and all else no-op.
-     * NOTE: Numpad9 (0x69) is the up-table (JUMP) in the original, not a
-     * facing key — the earlier "1/3/7/9 face" live note was wrong for 9. */
+    /* Second switch (0x406424, idx table 0x40644c; re-verified against
+     * raw table bytes 2026-08-30 — the 2026-08-29 "byte-verify" had two
+     * misreads, both fixed now):
+     * PageUp(0x21)/Numpad9(0x69) -> 6 (idx @0x406494 = 0 -> jt[0] =
+     * 0x406320, the SAME case body as PageUp); PageDown(0x22)/Numpad3 -> 4;
+     * End(0x23)/Numpad1 -> 1; Home(0x24)/Numpad7 -> 3 (all mode-0 only);
+     * Left(0x25)/Numpad4 -> L[] steer; Up(0x26)/Numpad8(0x68) -> up-table
+     * (0x4064bc, frame 3..0x13); Right(0x27)/Numpad6 -> R[] steer;
+     * Down(0x28)/Numpad2 -> mode 0 ? frame 0 : down-table (0x406498,
+     * frame 0xd..0x15); '-'(0x2d)/Insert/Numpad0 -> crouch (mode 0);
+     * Numpad5 and all else no-op.
+     * The 0xd/0x12/0x13 crouch cycle: UP advances 0xd->0x12->0x13->0xd,
+     * DOWN walks it backwards 0xd->0x13->0x12->0xd (down-table bytes:
+     * 0x406498=0x406293(0x13), 0x4064ac=0x4062ce(0xd),
+     * 0x4064b0=0x4062c4(0x12)). */
     uint32_t new_frame = frame;
     switch (vk) {
-    case 0x21: /* VK_PRIOR (PageUp): facing 6, mode 0 only */
+    case 0x21: case 0x69: /* VK_PRIOR / VK_NUMPAD9: facing 6, mode 0 only
+     * (0x69 shares PageUp's case body 0x406320 — idx byte @0x406494 = 0) */
         if (mode == 0)
             new_frame = 6;
         break;
@@ -314,7 +322,7 @@ static void ski_key_down(uint32_t vk)
             ENT16W(g_c72c, ENT_STEER) = steer;
         }
         break;
-    case 0x26: case 0x68: case 0x69: /* VK_UP / VK_NUMPAD8 / VK_NUMPAD9 */
+    case 0x26: case 0x68: /* VK_UP / VK_NUMPAD8 */
         switch (frame) {
         case 3: case 7: case 0xc:
             if (ENT16(g_c72c, ENT_SPEED) == 0) {
@@ -352,11 +360,11 @@ static void ski_key_down(uint32_t vk)
             break;
         }
         switch (frame) {
-        case 0xd: new_frame = 0x12; break;
-        case 0x12: new_frame = 0x13; break;
-        case 0x13: new_frame = 0xd; break;
-        case 0x14: new_frame = 0xe; break;
-        case 0x15: new_frame = 0xf; break;
+        case 0xd: new_frame = 0x13; break;   /* 0x406293 */
+        case 0x12: new_frame = 0xd; break;   /* 0x4062ce */
+        case 0x13: new_frame = 0x12; break;  /* 0x4062c4 */
+        case 0x14: new_frame = 0xe; break;   /* 0x40629d */
+        case 0x15: new_frame = 0xf; break;   /* 0x4062a7 */
         }
         break;
     case 0x2d: case 0x60: /* VK_INSERT / VK_NUMPAD0 */
