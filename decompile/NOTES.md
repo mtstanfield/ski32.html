@@ -2120,3 +2120,74 @@ the "M1 collide" response + run-end/reset path, `ski_entity_step`@0x402be0 /
 `ski_entity_rect`@0x401410 / the collide-zeroing of vx=vy=0) against the
 original. Fixing it is required for pixel-perfect active gameplay; s03 tick
 301 is the minimal repro (both sides identical through 300).
+
+---
+
+## HANDOFF (2026-08-30) — state for next session
+
+### What was in flight before the yeti rabbit hole
+Two active sub-goals from the T15 suite run:
+1. **s03/s05/s08 gameplay divergence** — root-caused to a rebuild
+   collision/run-end bug (original's player collides + resets on the first
+   steering input at s03 tick 301; rebuild's does not). Root cause documented
+   above + committed (8b0b34a). **The actual fix is NOT yet done** — this is
+   the main outstanding gameplay bug. Minimal repro: s03 tick 301 (both sides
+   0px through tick 300).
+2. **Yeti eating animation** — teeth-picking pose (0x36/0x37, sprites
+   080/081) reportedly skipped; the yeti drops to arms-up idle (0x2a) after the
+   eat anim.
+
+### DONE this session (committed 4b21c56)
+- **CMake resource-embedding fix (the "rebuild produces 0 frames / doesn't
+  tick" blocker).** Root cause: this toolchain's CMake (4.2.1) does NOT
+  auto-detect the RC compiler, so `src/resources.rc` was silently dropped and
+  the .exe shipped with **no resource section**. `LoadBitmapA` then returned
+  NULL, `wm_create_main` hit the invisible "can't load bitmaps" fatal
+  MessageBox, the window never mapped (`IsUnMapped`), so no `WM_SIZE`/
+  `WM_ACTIVATE` was delivered, so the game stayed paused and never ticked.
+  Fixed by invoking windres explicitly in CMakeLists and linking the object.
+  .exe grows ~328K -> ~595K; the rebuild now ticks and dumps frames normally.
+  This unblocks all future rebuild-vs-original frame capture.
+  - Diagnostic detail: `nCmdShow=10` (SW_SHOWDEFAULT) is what wine passes;
+    the window maps fine once bitmaps load. No window manager is required.
+- **`ski_gate_cruise` eating-switch break cases now `return`** (1:1
+  transcription of the original `jle 0x4046b8`, which restores `d->frame` and
+  returns, skipping the homing block). This is correct but **NOT the fix** for
+  the yeti anim (see below).
+
+### STILL BROKEN — yeti teeth-picking anim (on Windows, user-verified)
+The eat anim plays (0x32->0x33->0x34 observed) but the yeti jumps to arms-up
+(0x2a) **before** reaching 0x35/0x36/0x37. The break-cases `return` is a
+faithful transcription, so the real cause is elsewhere. Open leads (none yet
+confirmed):
+- **(a)** Is `ski_gate_cruise` actually running for the yeti every tick after
+  the kill? (`ski_gate_step`@0x4041c0 dispatches types 5..8 -> cruise;
+  `ski_gate_update`@0x404130 only allocs the entity once it enters the view
+  rect.)
+- **(b)** Is `d->frame` the value the renderer actually reads for the yeti?
+  `ski_gate_step` ends with `ski_set_frame(e, d->frame)` — confirm the render
+  path uses the entity frame and that nothing else overwrites it between ticks.
+- **(c)** Does the player-kill / run-end path (`ski_entity_die(e2)` in
+  `ski_collide` case 5-8, or a downstream reset) clobber the yeti's `desc`
+  (frame/timestamp) before 1000 ms elapse, forcing the homing (arms-up) branch?
+- The eating timeline is `dt = g_c698 - d->timestamp`; 0x35->0x36 needs
+  dt>1000. In the deterministic build g_c698 advances 40ms/tick, so ~25 ticks
+  to reach 0x36. If the yeti's frame is reset to <0x32 before then, it drops
+  into the homing block and never shows teeth-picking.
+
+### Reproduction / tooling notes (verified this session)
+- Rebuild recipe: `rm -rf build-native-harness && mkdir build-native-harness &&
+  cd build-native-harness && cmake -DCMAKE_BUILD_TYPE=Release
+  -DSKI_HARNESS=ON -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc
+  -DCMAKE_RC_COMPILER=i686-w64-mingw32-windres .. && make -j8 ski`.
+  The rebuild now ticks (verified: ~29 ticks/s, frames at
+  `frame_NNNNNN_main.ppm`, P6 760x734).
+- Run: `cd <out> && python3 harness/gen_input.py
+  harness/scenarios/<scen>.json ski_in.bin && wine
+  /home/ms/projects/skifree-wasm/build-native-harness/ski.exe`.
+- Xvfb :99 (`1024x768x24`), no WM needed. The game is focus-independent in the
+  SKI_HARNESS build (resumes on `c770==0`).
+
+### Untracked diagnostic probes (left for reuse; not committed)
+- `harness/strprobe/{capprobe,gdtest,gwrtest}.c` — T15 color-capture GDI probes.
+- `tools/{find_child.py,iat_snap.py}` — window/IAT inspection helpers.
