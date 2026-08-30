@@ -2077,3 +2077,46 @@ without also editing section characteristics — deferred.
   The stubbed binary itself is validated only up to launch (window +
   activation + init OK; first tick could not be observed because of the
   timer outage).
+
+### T15 orig-vs-rebuild frame diff (2026-08-30) — color capture FIXED
+Original-side in-process capture was producing corrupt/white colors because
+the `CreateCompatibleBitmap` dest is an X-backed DDB: `GetDIBits` does an X
+read that **times out (0xC000000B)** in the game process, and the screen-DC
+source reads white. Fix (commit 7927da2) mirrors the rebuild's working
+SKI_HARNESS path: **24bpp top-down `CreateDIBSection`** (local raster, read
+directly — no GetDIBits) as the BitBlt dest + **window-DC source** at (0,0).
+Stub writes BGR; rebuild writes B,G,R (32bpp bytes[0..2]) — consistent, so
+orig-vs-rebuild diffs are valid.
+
+Results (`harness/diff.py`, tol=0, status-panel masked):
+- s01_menu **PASS 0px**, s02_start **PASS 0px** (408f), s04_crouch **PASS 0px** (407f).
+- s03_steering **FAIL** (502/803, worst 10296px), s05_modes **FAIL** (794/802),
+  s08_pause_scores **FAIL** (293/301). s06_longrun/s07_monster not yet run.
+- The prior "trail-over-menu" s01 anomaly is gone (explained by the color fix).
+
+### s03/s05/s08 divergence root cause (2026-08-30) — REBUILD gameplay bug
+The s03/s05/s08 failures are NOT a capture issue. Clean repro (s03): both
+sides **identical (0px) through tick 300**; they diverge at **tick 301** when
+the single-tick LEFT tap (word 300) takes effect. From tick 300→800 the
+original's scene is **100% static (0px change)** while the rebuild keeps moving
+(up to 10296px).
+
+Live original memory (frozen state, e.g. tick 494) proves it is NOT a pause:
+- `c67c`(pause)=1 (running), `c770`(minimize)=0, tick still firing
+  (`c5f4` delta = 40ms), and the 0x405a17 je→nop patch removes focus-based
+  pausing. Re-activating the window does not unfreeze it.
+- Entity list: player (type 0, `c64c`) has flags 0x15 (bit 4=rendered, bit
+  3=updated) — so it IS updated & rendered — but its **position and velocity
+  are reset to zero**: `x@0x40=y@0x42=z@0x44=vx@0x46=vy@0x48=vz@0x4a = 0`
+  (render cache 0x30/0x34/0x38 is stale). Everything (incl. pine sway) is
+  frozen.
+
+Conclusion: at the first steering input the **original's player collides and
+the crash/run-end handler resets the player (pos/vel=0)**, dropping the game
+into a static run-ended state (waiting for a restart key the scenario never
+sends). The **rebuild's player does not collide** on the same input, so it
+continues. This is a **collision/physics divergence in the rebuild** (compare
+the "M1 collide" response + run-end/reset path, `ski_entity_step`@0x402be0 /
+`ski_entity_rect`@0x401410 / the collide-zeroing of vx=vy=0) against the
+original. Fixing it is required for pixel-perfect active gameplay; s03 tick
+301 is the minimal repro (both sides identical through 300).
