@@ -182,6 +182,23 @@ typedef TEXTMETRICS TEXTMETRICA;
 #define SND_LOOP        0x0008
 #define SND_NOSTOP      0x0010
 
+/* VK_* / BI_RGB: consumed by the SKI_HARNESS build (ski_keys.h key table
+ * and the CreateDIBSection tick-dump path) — shim build prerequisites
+ * (API.md "Build notes", 2026-08-31 harness probe). Real SDK values. */
+#define VK_RETURN       0x0D
+#define VK_UP           0x26
+#define VK_LEFT         0x25
+#define VK_RIGHT        0x27
+#define VK_DOWN         0x28
+#define VK_NUMPAD0      0x60
+#define VK_NUMPAD1      0x61
+#define VK_NUMPAD3      0x63
+#define VK_NUMPAD7      0x67
+#define VK_NUMPAD9      0x69
+#define VK_F2           0x71
+#define VK_F3           0x72
+#define BI_RGB          0
+
 #define GMEM_MOVEABLE   0x0002
 #define GMEM_ZEROINIT   0x0040
 #define LMEM_FIXED      0x0000

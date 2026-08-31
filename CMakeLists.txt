@@ -44,6 +44,9 @@ endif()
 if(SKI_SOURCES)
   add_executable(ski ${SKI_SOURCES})
   if(EMSCRIPTEN)
+    # `#include <windows.h>` in the unmodified game sources must resolve to
+    # shim/windows.h (API.md "Build notes").
+    target_include_directories(ski PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/shim)
     target_link_options(ski PRIVATE
       -sENVIRONMENT=web
       -sINITIAL_MEMORY=16MB
