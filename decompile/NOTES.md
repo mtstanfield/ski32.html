@@ -2561,6 +2561,9 @@ requirement applies to original runs only.)
    2166 -> 2167 B. Same commit: rebuild key-table fixes verified 1:1
    against the original's tables (VK 0x69 Numpad9 -> frame-6 case; DOWN
    crouch cycle order). Review follow-up: comment reflow NIT (2d28e57).
+   This was the actual root cause of the s03/s05/s08 divergence; the
+   "rebuild collision/run-end bug" theory in the 2026-08-30 handoff
+   (8b0b34a) is DISPROVEN — see the T16 entry above.
 2. **s06_longrun — ski_collide case 3 (14817af).** The snowboarder
    tumble/crash test (0x403eb4, dispatch cl=1/cl=2) compared `e1->y`
    against the partner top instead of `e1->mode` (original: `cmp %bp,%bx`
@@ -2613,7 +2616,7 @@ requirement applies to original runs only.)
 ### M3 (WASM) start
 Exact next tasks, verbatim from
 `docs/superpowers/plans/2026-08-24-skifree-decompile-wasm.md`
-("M3 — WASM port (Tasks 16–21)", plan lines 1101-1739 — read that section
+("M3 — WASM port (Tasks 16–21)", plan lines 1101-1736 — read that section
 in full before starting; it contains all steps, code, and commit
 messages):
 - Task 16: Authoritative shim API list (linker probe)
