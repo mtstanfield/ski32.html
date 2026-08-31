@@ -638,7 +638,7 @@ ski_ent_t *ski_set_frame(ski_ent_t *e, uint32_t frame)
         ski_assert_fail(SKI_ASSERT_FILE, 0x440);
     orig = e;
     e = ski_entity_set_col(e, (uint16_t)ski_frame_col[frame]);
-    *(uint32_t *)&orig->frame = frame; /* 0x402175, dword into original pointer */
+    memcpy(&orig->frame, &frame, sizeof frame); /* 0x402175, dword into original pointer */
     return e;
 }
 
@@ -1097,17 +1097,15 @@ void ski_gate_type4(ski_gate_desc_t *d)
  * c698 - timestamp (real ms): 0x32->0x33; 0x33->(0x34|0x32)@500; 0x34->0x35@700;
  * 0x35->0x36@1000; 0x36->0x37; 0x37->(0x2a|0x36)@3000. 0x36/0x37 are the
  * "picking-its-teeth" pose (cols 80/81); 0x2a is the arms-up idle.
- * The switch's break cases (0x34/0x35 with dt below threshold) return here:
- * the original `jle LAB_004046b8` restores d->frame to its incoming value and
- * returns, skipping the homing block. This is a 1:1 transcription of the
- * original (0x4043f8 / 0x404413 both target 0x4046b8).
- * NOTE: the rebuilt binary is still reported (on Windows) to skip the
- * teeth-picking pose after the eat anim, so this return is necessary but NOT
- * the (only) cause. The real cause is elsewhere — the eating anim's frame
- * advances (0x32->0x33->0x34 observed) but jumps to 0x2a before 0x35/0x36/0x37.
- * Open leads: (a) is ski_gate_cruise actually running for the yeti each tick,
- * (b) is d->frame the value the renderer reads, (c) does the player-kill path
- * (ski_entity_die / run-end reset) clobber the yeti's desc before 1000 ms elapse. */
+ * The switch's break cases (0x4043f8 / 0x404413) `jle 0x4046b8`, the shared
+ * tail that stores d->frame back to its incoming value and returns, skipping
+ * the homing block — 1:1 transcription. The airborne branch (0x404390)
+ * targets the SAME tail without the walking toggle that precedes it at
+ * 0x4046a7 (Ghidra mis-renders the toggle as part of the shared tail; it is
+ * not — see the airborne-branch comment below). 2026-08-31: that airborne
+ * clobber was the teeth-picking-anim bug; the state machine here otherwise
+ * matches the original tick for tick (verified by state-level diff, see
+ * decompile/NOTES.md "Yeti teeth-picking anim — RESOLVED (2026-08-31)"). */
 void ski_gate_cruise(ski_gate_desc_t *d)
 {
     if (d == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0xa68);
@@ -1121,7 +1119,18 @@ void ski_gate_cruise(ski_gate_desc_t *d)
         d->fdelta = (int16_t)((int16_t)d->fdelta - 1);
     }
     if (d->z != 0) {
-        d->frame = (uint16_t)((d->frame == 0x2e) + 0x2e);
+        /* 0x40438c-0x404390: `cmp %bx,0x18(%esi); jne 0x4046b8` — while
+         * airborne (z != 0) the original jumps straight to the shared tail
+         * 0x4046b8 (`mov %ebp,0x10(%esi); ret`) with ebp still holding the
+         * incoming frame loaded at 0x40435b: d->frame is stored back
+         * UNCHANGED. The walking-pose toggle `((frame == 0x2e) + 0x2e)`
+         * (0x4046a7-0x4046b6) is reached only from the walking-apply path
+         * below (wdx > 0 || wdx == 0 && wdy > 0); Ghidra's FUN_00404350
+         * hoists it beside LAB_004046b8 where it looks like it applies to
+         * every entry — it does not. (2026-08-31: applying it here clobbered
+         * the wake anim — a kill landing on an airborne tick (2 of 3 walking
+         * phases, 9 of 10 sleep-bob ticks) flipped 0x32..0x37 to 0x2e/0x2f
+         * so the teeth-picking poses 0x36/0x37 were never reached.) */
         return;
     }
     uint32_t frame = d->frame;
@@ -2301,10 +2310,12 @@ static void ski_dbg_state_dump(void)
 {
     static FILE *fs;
     static int full;
+    static int yeti;
     static int full_init;
     const ski_ent_t *pl = (const ski_ent_t *)g_c72c;
     if (!full_init) {
         full = (getenv("SKI_DBG_FULL") != NULL) ? 1 : 0;
+        yeti = (getenv("SKI_DBG_YETI") != NULL) ? 1 : 0;
         full_init = 1;
     }
     int n = 0;
@@ -2325,6 +2336,30 @@ static void ski_dbg_state_dump(void)
             pl ? (unsigned)pl->flags : 0,
             pl ? (unsigned)(int16_t)pl->frame : 0,
             n, (unsigned)(uint16_t)g_c5f2, (unsigned)(uint16_t)g_c640);
+    if (yeti) {
+        /* Gate-descriptor state for the 4 yeti descs (types 5-8) in the
+         * c720 moving list, one line each, at physics entry. fr/ts are the
+         * exact inputs to ski_gate_cruise's wake-anim switch this tick
+         * (dt = c698 - ts, c698 already advanced); z/fd the airborne phase.
+         * Mirrors tools/yeti_poll.py on the instrumented original. */
+        int i = 0;
+        for (const ski_gate_desc_t *d = g_c720.first;
+             d != NULL && d < g_c720.end && i < 64;
+             d = (const ski_gate_desc_t *)((const char *)d + sizeof *d), i++) {
+            if (d->type < 5 || d->type > 8)
+                continue;
+            fprintf(fs,
+                    "  Y%02d type=%u fr=%02x ts=%u dt=%u x=%d y=%d z=%d "
+                    "fd=%d vx=%d vy=%d ent=%s\n",
+                    i, (unsigned)d->type, (unsigned)d->frame,
+                    (unsigned)d->timestamp,
+                    (unsigned)(g_c698 - d->timestamp),
+                    (int)(int16_t)d->x, (int)(int16_t)d->y,
+                    (int)(int16_t)d->z, (int)(int16_t)d->fdelta,
+                    (int)(int16_t)d->vx, (int)(int16_t)d->vy,
+                    d->ent != NULL ? "y" : "n");
+        }
+    }
     if (full) {
         int i = 0;
         for (const ski_ent_t *e = (const ski_ent_t *)g_c618;

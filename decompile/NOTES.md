@@ -2382,3 +2382,116 @@ status-panel mask (620,0)-(760,60))
   ski_win.c. The build log's one remaining warning is -Wstrict-aliasing
   in ski_set_frame (ski_core.c:641) — a default-at-O2 warning, not a
   -Wall warning, pre-existing, untouched here.
+
+## Yeti teeth-picking anim — RESOLVED (2026-08-31)
+
+### Symptom (pre-fix)
+After a yeti kill the rebuild played 0x32 -> 0x2e/0x2f (walking poses) ->
+0x2a (idle) and never reached 0x33..0x37; the teeth-picking poses
+0x36/0x37 (sprites 80/81) were never shown. The original (user-verified on
+Windows) plays the full wake sequence. The pre-fix bug was also the reason
+s07_monster had not gone green: the same clobber ran on every sleep-bob arc
+(0x2b -> 0x2e/0x2f during the 9 airborne bob ticks).
+
+### Ground truth (state-level, both sides)
+- Rebuild: `SKI_DBG_YETI=1` dump added to `ski_dbg_state_dump` (harness-only
+  permanent probe): per tick, per type-5..8 desc in c720 — type/fr/ts/dt/
+  x/y/z/fd/vx/vy/ent. Line N = physics entry of tick N, so rendered frame
+  R(t) = fr at line t+1.
+- Original: healthy 10506-frame s09 run (captured 2026-08-31, pre-freeze
+  window; see environment note) + sprite-crop hash runs (yeti region
+  x365-435 y165-245) giving the per-tick frame codes; /proc/PID/mem poller
+  (/tmp/yeti_poll2.py, strict c698-change dedup) for c698/dt sampling.
+- Scenario /tmp/s09_yetikit3.json (10500 ticks, not committed): facing1@100
+  + alternating steer every 150 ticks. The killer is the **type-8** yeti
+  (Y25, spawn x=+16060 y=0, trigger player.x > 16000, 0x4044c9 `cmp
+  $0x3e80`). The brief's "type-7 is the practical killer" claim is
+  disproven: type-7's self-gate `cmp $0xc180` (0x4044b0) fails at spawn
+  x <= -16000 and its homing trigger (player.x < -16000) never fires, so it
+  sits dormant idle for the whole scenario. Kill tick K = 9864 on both
+  sides (player 16311/25127, yeti 16333/25125); the yeti is airborne at the
+  kill (z=1), so the first two post-kill cruises are airborne holds.
+
+Pre-fix rebuild (state dump, K=9864):
+  R(9864)=0x32 (kill); R(9865)=0x2e, R(9866)=0x2f (CLOBBERED, z!=0);
+  R(9867-9876)=0x2a, R(9877)=0x2b, R(9878-9885)=0x2e/0x2f (clobbered DURING
+  the bob arc), R(9886+)=0x2a/0x2b idle. 0x33..0x37 never reached.
+  First divergence: tick 9865 (K+1), field d->frame: 0x2e vs 0x32.
+
+Original (Wine-stub, healthy run) per-tick frame codes:
+  R(9864)=0x32; R(9865)=R(9866)=0x32 (airborne holds, z!=0);
+  R(9867)=0x33, R(9868)=0x32, R(9869)=0x33, ... R(9877)=0x33 (ping-pong);
+  R(9878-9881)=0x34 (4 ticks); R(9882-9889)=0x35 (8); R(9890)=0x36 (1);
+  R(9891-9939)=0x37 odd / 0x36 even (49); R(9940)=0x2a; sleep-bob 0x2b
+  9-tick arcs at 9971, 9981, 9991, 10004, 10040, 10059, 10087, 10117 with
+  0x2a between. All transition ticks sit exactly on the disasm thresholds
+  (dt=40ms/tick: 0x34 at dt=560>=500, 0x35 at 720>700, 0x36 at 1040>1000,
+  0x2a at 3040>=3000).
+
+### Root cause — rebuild's airborne branch clobbered d->frame (Ghidra
+mis-render)
+0x404378-0x404388: z/fdelta update (z>0 -> fdelta--; else z=fdelta=0).
+0x40438c-0x404390: `cmp %bx,0x18(%esi); jne 0x4046b8` — while airborne
+(z != 0) the original jumps straight to the shared tail 0x4046b8
+(`mov %ebp,0x10(%esi); ret`) with ebp still holding the incoming d->frame
+loaded at 0x40435b: the frame is stored back UNCHANGED and the function
+returns before the state dispatch. The walking-pose toggle
+`d->frame = (frame==0x2e)+0x2e` (0x4046a7-0x4046b6) is reached only from
+the grounded walking-apply path; Ghidra's FUN_00404350 hoists it beside
+LAB_004046b8 where it looks like part of the shared tail — it is not. The
+pre-fix rebuild applied it on every airborne tick, so any kill landing on
+an airborne tick (2 of 3 walking phases; 9 of 10 sleep-bob ticks) flipped
+0x32 to 0x2e/0x2f and the wake machine never ran. The rest of
+ski_gate_cruise (wake table 0x4046c4 = [0x4043c5, 0x4043d5, 0x4043f3,
+0x40440e, 0x404429, 0x404439], thresholds 0x1f4/0x2bc/0x3e8/0xbb8,
+self-gates, homing, apply block) is 1:1.
+
+### Fix (1 line + comment, ski_gate_cruise)
+`if (d->z != 0) { return; }` immediately after the z/fdelta update, before
+the frame dispatch — exact 0x4046b8 semantics (the store there is a no-op
+write of the unchanged value). Comment cites 0x40435b/0x40438c/0x404390/
+0x4046b8/0x4046a7 and the Ghidra mis-render.
+
+### House hygiene (same commit)
+ski_set_frame: `*(uint32_t*)&orig->frame = frame` -> memcpy — removes the
+last build warning (-Wstrict-aliasing, ski_core.c:641, pre-existing since
+the S06 session); both build targets now compile with ZERO warnings
+(harness ON and OFF, -O2 -mfpmath=387 -Wall).
+
+### Verification (SKI_NO_ACTIVATE=1, fresh /tmp/orig_t15.exe via
+stub_patch, build-native-harness/ski.exe)
+- State-level, s09 post-fix: rebuild d->frame vs original per-tick frame
+  codes over the full post-kill window 9864..10126 (187 ticks): **0
+  divergence (0 tolerance)**. Kill tick matches (9864). Sleep-bob 0x2b arc
+  start ticks match exactly (9971/9981/9991/10004/10040/10059/10087/10117)
+  — the rand-stream fingerprint (T8 seed 0x123456) confirms identical
+  per-tick rand consumption from the kill tick on.
+- s09 pixels (both sides healthy-clock runs): 493 common frames (1000, 5000,
+  9780-10120, 10400-10505) — **byte-identical, 0px unmasked** (pre-kill,
+  kill+wake window, sleep+bob, and late spot checks).
+- harness/diff.py tol=0, scene region, panel mask (620,0)-(760,60):
+  - s07_monster: 4004 frames, 0 failing, worst=0px -> PASS (was divergent:
+    pre-fix clobber ran on every sleep-bob arc)
+  - s01_menu:     304 frames, 0 failing, worst=0px -> PASS
+  - s02_start:    403 frames, 0 failing, worst=0px -> PASS
+  - s03_steering: 807 frames, 0 failing, worst=0px -> PASS
+  - s04_crouch:   403 frames, 0 failing, worst=0px -> PASS
+
+### Environment note (2026-08-31) — transient wine GetTickCount freeze
+During two windows (08:31-08:45 and during the s07/regression original
+batch ~09:1x-09:2x) every orig_t15.exe launch had c698 FROZEN in-process
+(delta=0 over 3x300ms samples) while the game ticked normally at 25/s
+(frames kept landing); standalone wine GetTickCount advanced correctly; the
+freeze lifted in between (08:47: c698 advancing 1:1 in the game process).
+strace: GetTickCount makes ZERO time syscalls per call (in-process cached
+time fed by the wineserver) — consistent with a transiently stalled
+wineserver time feed. Impact on a frozen run: only the status panel's
+redraw gate (0x40104d `cmp $0x147` on c698-c5dc) starves, so the panel
+shows stale text; the s01-s04/s07 scene-region 0px diffs against the
+frozen-clock originals are the empirical confirmation that no other
+scene-visible logic consumes c698 in those scenarios (the wake machine is
+the only gameplay consumer and needs a kill). s07 unmasked breakdown:
+5067px over 108 frames, all inside the masked panel rect, scene 0px. The
+s09 ground-truth run (healthy clock, full wake sequence) was captured
+before the first freeze window; its 0px pixel diff used a healthy-clock
+rebuild side as well.
