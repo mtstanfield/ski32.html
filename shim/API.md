@@ -1,107 +1,181 @@
 # Shim API — authoritative symbol list (Task 16)
 
-Captured 2026-08-29: `emcc -O2 -I shim src/*.c <main wrapper>
--DSKI_DETERMINISTIC=1 -DSKI_HARNESS=0 -Wl,--error-limit=0` → wasm-ld
-`undefined symbol` list, deduplicated. The shim (Tasks 17–20) implements
-**exactly** this list (plus the `EMSCRIPTEN_KEEPALIVE` debug hooks, which
-live in `canvas.c` and are not in this list).
+Re-probed 2026-08-31 (emcc 6.0.6, after the 16 M2 commits that touched `src/`
+since the 2026-08-29 probe; the symbol set is **unchanged**). The shim
+(Tasks 17–20) implements **exactly** this list — nothing more, nothing less
+(plus the `EMSCRIPTEN_KEEPALIVE` debug hooks, which live in `canvas.c` and are
+not in this list).
 
-Two symbols appear additionally when `SKI_HARNESS=1` (the T21 WASM
-diff build): `CreateDIBSection` (ski_core.c:2476, tick-frame DIB) and
-`GetProcessId` (ski_win.c:573, wproc trace line) — declared in
-`win32.h`, implemented in `misc.c`.
+## Probe (reproducible)
 
-## user32 — windows/messages (29)
+```sh
+source ~/.emsdk/emsdk_env.sh          # Emscripten 6.0.6
+mkdir -p /tmp/skiprobe && cd /tmp/skiprobe
+# main_wrap.c (probe-only, not in the repo):
+#   #include <windows.h>
+#   int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int);
+#   int main(void) { return WinMain((HINSTANCE)1, 0, 0, 1); }
+
+# Core build — 60 undefined symbols:
+emcc -O2 -I <repo>/shim -DSKI_DETERMINISTIC=1 -DSKI_HARNESS=0 \
+     -Werror=implicit-function-declaration \
+     <repo>/src/*.c main_wrap.c -o ski.js -Wl,--error-limit=0 2>&1 | tee emcc-errors.txt
+
+# Harness build — 62 = core 60 + CreateDIBSection + GetProcessId:
+emcc -O2 -I <repo>/shim -DSKI_DETERMINISTIC=1 -DSKI_HARNESS=1 \
+     -Werror=implicit-function-declaration -include stdlib.h \
+     -DVK_LEFT=0x25 -DVK_RIGHT=0x27 -DVK_UP=0x26 -DVK_DOWN=0x28 \
+     -DVK_NUMPAD0=0x60 -DVK_NUMPAD1=0x61 -DVK_NUMPAD3=0x63 \
+     -DVK_NUMPAD7=0x67 -DVK_NUMPAD9=0x69 -DVK_F2=0x71 -DVK_F3=0x72 \
+     -DVK_RETURN=0x0d -DBI_RGB=0 \
+     <repo>/src/*.c main_wrap.c -o ski_h.js -Wl,--error-limit=0 2>&1 | tee emcc-errors-harness.txt
+```
+
+- `main_wrap.c` supplies `main` (the game's entry is `WinMain`); `-I shim`
+  resolves the game's `#include <windows.h>` to `shim/windows.h` so the
+  unmodified sources compile.
+- `-Werror=implicit-function-declaration` proves every Win32 call in `src/`
+  is declared in `shim/win32.h`, so the linker's undefined list is complete:
+  no symbol can hide behind an implicit declaration.
+- The harness build's `VK_*`/`BI_RGB`/`<stdlib.h>` defines are probe-side
+  stand-ins for what the shim must provide (see Build notes, last item).
+
+## Cross-check against the original PE
+
+`ski32.exe`'s import directory (parsed from `original/ski32.exe`; matches the
+IAT documented in `harness/stub/orig_stub.asm`) has **96 imports in 4 DLLs**:
+KERNEL32 48, USER32 33, GDI32 14, WINMM 1.
+
+- All 60 core probe symbols appear in that IAT **except** `PlaySoundA`:
+  the original imports the legacy WINMM alias `sndPlaySoundA` (same function);
+  the rebuild calls the standard name `PlaySoundA`, so the shim exports that.
+- The remaining IAT entries (CRT glue: `Heap*`, `MultiByteToWideChar`,
+  `LCMapStringA`, `GetEnvironmentStrings*`, `RtlUnwind`, …) are satisfied by
+  emscripten's system libraries — they do not appear in the probe.
+- Grouping below follows the original IAT's DLLs.
+
+## user32 — windows/messages (33)
 
 | symbol | what it must do |
 |---|---|
-| `RegisterClassA` | store class by name → WndProc (both `SkiMain` and `SkiStatus` register; return nonzero atom) |
-| `CreateWindowExA` | create a window record (dc sized w×h, class bg fill) + start the main loop once the main window is created |
-| `FindWindowA` | look up a window by class name |
-| `MoveWindow` | update x/y/w/h (the WM_SIZE handler resizes the offscreen DC) |
-| `SetWindowPos` | same as MoveWindow per the flag bits (SWP_NOSIZE/NOMOVE/NOZORDER) |
-| `SetWindowTextA` | update the title (cosmetic only) |
-| `ShowWindow` | track visible/minimized state; SW_MINIMIZE drives the original's auto-pause (c770) — the message path must still deliver WM_SIZE-like semantics |
+| `RegisterClassA` | store class by name → WndProc + bg brush; both `SkiMain` (style 0x2023) and `SkiStatus` register (ski_win.c:807–826); called only when hPrev==NULL; return nonzero atom |
+| `CreateWindowExA` | create a window record (client dc w×h) + start the main loop once the main window exists; main: style 0x2cf0000, w = min(HORZRES,VERTRES), h = VERTRES, x = (HORZRES−w)/2 (ski_win.c:834); status: WS_CHILD 0x4000000, 0×0 (ski_win.c:838) |
+| `FindWindowA` | look up a window by class name; the single-instance guard probes "SkiMain" (ski_win.c:785) — return NULL on the web (fresh boot) |
+| `MoveWindow` | update x/y/w/h; the WM_SIZE handler resizes the offscreen canvas |
+| `SetWindowPos` | MoveWindow semantics per flag bits; only used with 0x3 = SWP_NOSIZE\|SWP_NOMOVE (ski_win.c:787) |
+| `SetWindowTextA` | update the title (cosmetic); the pause state sets it to STR_PAUSED id 2 (ski_win.c:167) |
+| `ShowWindow` | track visible/minimized state; SW_MINIMIZE (6, ski_win.c:264) drives the auto-pause (c770); initial show at ski_win.c:842/844 |
 | `UpdateWindow` | no-op (painting is tick-driven) |
 | `SetFocus` | no-op |
-| `InvalidateRect` | no-op |
-| `KillTimer` | disarm the game timer (pause path — c6d0=0) |
-| `SetTimer` | arm the 40 ms game timer (id 0x29a, period c678&0xffff) |
+| `InvalidateRect` | no-op (full repaint every tick) |
+| `KillTimer` | disarm the 40 ms game timer (pause path — c6d0=0) |
+| `SetTimer` | arm the 40 ms callback timer (id 0x29a, period c678&0xffff, proc c940 — see skidef.h) |
 | `BeginPaint` | fill PAINTSTRUCT: hdc = window dc, rcPaint = full client rect, fErase = 1 |
 | `EndPaint` | flush the window framebuffer to the canvas |
-| `GetDC` | return the window's DC |
+| `GetDC` | return the window's DC; `GetDC(NULL)` = the *screen* DC (ski_win.c:769) |
 | `ReleaseDC` | no-op, return 1 |
-| `GetClientRect` | 0,0,w,h |
-| `DefWindowProcA` | no-op, return 0 |
+| `GetClientRect` | {0,0,w,h} |
+| `DefWindowProcA` | no-op, return 0 (fall-through for undriven messages) |
 | `PostQuitMessage` | set the quit flag (loop exit) |
 | `GetMessageA` | pop one queued message (timers/keys/clicks) into the MSG; 0 on empty+quit |
 | `TranslateMessage` | no-op |
 | `DispatchMessageA` | call the window's WndProc(msg, wp, lp) |
-| `DestroyWindow` | mark window dead (WM_DESTROY path during quit) |
-| `IsIconic` | return minimized state (0 or 1) |
-| `LoadIconA` | return a non-NULL dummy |
-| `LoadCursorA` | return a non-NULL dummy |
-| `OpenIcon` | identity |
-| `MessageBoxA` | high-score modal + "Ski Paused" box: console log + JS alert with OK |
-| `LoadStringA` | id → exact UI string from the .data table (group 1 ids 1..15, group 2 16..17 — see NOTES "String table"; copy ≤ max-1 chars, return length) |
-| `LoadBitmapA` | name/id → the pre-decoded sprite `HBITMAP` (see gdi32 below) |
-| `wsprintfA` | `vsnprintf` — all formats used are snprintf-compatible (`%2u %2.2u %5.2d %7ld`) |
+| `DestroyWindow` | mark window dead (WM_DESTROY path; also triggered by IDNO on the assert box, ski_core.c:143) |
+| `IsIconic` | return minimized state (0 or 1) — ski_win.c:788 |
+| `LoadIconA` | non-NULL dummy; class icon "iconSki" (ski_win.c:813) |
+| `LoadCursorA` | non-NULL dummy; IDC_ARROW (0x7f00) for both classes (ski_win.c:814, 821) |
+| `OpenIcon` | identity restore (single-instance guard, ski_win.c:789) |
+| `MessageBoxA` | **modal**, return IDOK=1/IDNO=2; three call sites: assert box 0x31 MB_ICONHAND\|MB_YESNO (IDNO → DestroyWindow main, ski_core.c:141), fatal box 0x30 MB_ICONERROR\|MB_OK (ski_core.c:158), high-score modal type 0, owner = main window (ski_core.c:2812) |
+| `LoadStringA` | id → exact UI string from the .data table (ids 1..17, skidef.h; NOTES "String table"); copy ≤ max−1 chars, return length |
+| `LoadBitmapA` | id → the pre-decoded sprite `HBITMAP` (ids 1..0x59; see Sprite model) |
+| `wsprintfA` | `vsnprintf` — all formats used are snprintf-compatible (`%2u %2.2u %5.2d %7ld %s`) |
+| `FillRect` | fill rect with the brush color (status panel background) |
+| `FrameRect` | 1-px 3D edge with the brush (status panel frame, DKGRAY_BRUSH, ski_win.c:729–730) |
 
-## gdi32 — surfaces/text (20)
+## gdi32 — surfaces/text (14)
 
 | symbol | what it must do |
 |---|---|
-| `CreateCompatibleDC` | new offscreen DC (sprite strips + status) |
+| `CreateCompatibleDC` | new offscreen DC (sprite strips, canvas, status) |
 | `DeleteDC` | free the DC |
-| `CreateCompatibleBitmap` | new w×h 32bpp bitmap (transparent/zero) |
-| `CreateBitmap` | new w×h bitmap from raw bits (the 8bpp sprite strips: DIB bits via `CreateBitmap`? — the game builds the strips from `LoadBitmapA` resources; verify the caller in ski_core.c before implementing: `CreateBitmap` is used at ski_core.c bitmap-load for the raw resource bytes) |
+| `CreateCompatibleBitmap` | new w×h bitmap at the reference DC's depth (window DC → 32bpp in the shim) |
+| `CreateBitmap` | new w×h bitmap from (w, h, planes, bpp, bits); called **only** with bpp=1, bits=NULL — the 1bpp mask strips (ski_core.c:275, 296) |
 | `SelectObject` | swap the DC's current object (bitmap); return the previous |
 | `DeleteObject` | free bitmap |
-| `GetObjectA` | fill `BITMAP` (bmWidth/bmHeight/bmBitsPixel/…) for a bitmap |
-| `BitBlt` | copy src rect → dst rect with ROP (SRCCOPY = straight copy; BLACKNESS/WHITENESS = fill; CAPTUREBLT = ignore) |
-| `PatBlt` | fill with ROP (PATINVERT = xor 0xFFFFFFFF; BLACKNESS/WHITENESS = fill) — verify the exact rop set against ski_core.c call sites |
-| `GetStockObject` | WHITE_BRUSH/BLACK_BRUSH/NULL_BRUSH → brush handle (color only matters for FillRect/FrameRect) |
-| `FillRect` | fill rect with the brush color |
-| `FrameRect` | 1-px 3D edge (raised/etched per NOTES T12 usage — the status panel frame) |
-| `TextOutA` | draw string at (x,y) with the captured pixel-exact font (Task 19), per-char advances |
-| `GetTextExtentPoint32A` | width = sum of per-char advances, height = font tmHeight |
+| `GetObjectA` | fill the 24-byte `BITMAP` prefix (bmType..bmBitsPixel — width/height/planes/bitcount); called with cnt=0x18 (sprite-load sizing pass) |
+| `BitBlt` | copy src rect → dst rect with ROP; the exact ROP set in use is below — must reproduce Win32 GDI's palette/index → color and 32bpp/1bpp conversion semantics |
+| `PatBlt` | ROP fill; **only** BLACKNESS 0xFF0062 is used (canvas clears, ski_core.c:2892/2974/3001) |
+| `GetStockObject` | index → brush handle; only 0 = NULL_BRUSH (ski_win.c:775), 4 = DKGRAY_BRUSH (ski_win.c:729), 10 = WHITE_BRUSH (ski_win.c:686) |
+| `GetTextExtentPoint32A` | width = sum of per-char advances, height = font tmHeight (pixel-exact font capture, Task 19) |
 | `GetTextMetricsA` | fill TEXTMETRICS from the captured metrics |
-| `GetDeviceCaps` | HORZRES=760, VERTRES=734 (client size — the game stores these in c6a0/c74c) |
-| `CreateDIBSection` | **[harness only]** w×h 32bpp DIB + out-ptr (tick-frame dump) |
+| `GetDeviceCaps` | screen-DC caps (hdc from `GetDC(NULL)`): index 8 = HORZRES → c6a0, index 10 = VERTRES → c74c (ski_win.c:770–771); the reference run used a 1024×768 screen (harness Xvfb) → window outer 768×768, client 760×734 (evidence/m0-geometry.txt) — the shim's "screen" must match for parity |
+| `TextOutA` | draw string at (x,y) with the captured pixel-exact font (Task 19), per-char advances |
 
-## kernel32 (10)
+### ROP set (verified against `decompile/ghidra/FUN_00401540.c` + `FUN_00405ab0.c`)
+
+| ROP | value | call sites |
+|---|---|---|
+| SRCCOPY | 0xCC0020 | ski_core.c:331 (sprite→image strip), 2977 (group canvas), 2565 (harness tick dump) |
+| MASKPEN | 0x330008 | ski_core.c:332 (sprite→1bpp mask strip) |
+| SRCAND | 0x8800C6 | ski_core.c:2901, 2982 (group canvas) |
+| BLACKNESS | 0xFF0062 | PatBlt only (above) |
+
+Note: the inline comments at ski_core.c:2901/2977/2982 misname these ROPs
+("SRCCOPY" over 0x8800C6, "SRCPAINT" over 0xCC0020). The **values** are
+transcribed from the decompilation and are authoritative; the comments are
+wrong (out of scope for this task — flagged for a follow-up). No CAPTUREBLT,
+PATINVERT, or WHITENESS call exists in the rebuild.
+
+## kernel32 (12)
 
 | symbol | what it must do |
 |---|---|
-| `GetTickCount` | virtual ms clock: advances with the rAF-driven tick schedule (NOT wall clock — determinism: the SKI_DETERMINISTIC rebuild already uses c698+40 per tick; the shim's clock must match: return the tick-derived value) |
+| `GetTickCount` | virtual ms clock: must advance on the tick schedule, **not** wall clock (determinism: the SKI_DETERMINISTIC build derives now = c698+40 per tick, ski_core.c:2623; ski_win.c:180) |
 | `LocalAlloc` | `calloc` (entity pool, string cache) |
-| `FreeLibrary` | no-op, return 1 (called on the resource module handle) |
-| `FindResourceA` | (inst, name, type) → resource handle for the 89 bitmaps (type RT_BITMAP) — resolve from the embedded sprite table by id |
-| `LoadResource` | resource handle → global handle (identity into the sprite table) |
-| `LockResource` | return the sprite's pixel base (or the decoded `ShimBmp*` as the HGLOBAL — see below) |
-| `FreeResource` | no-op |
-| `GetPrivateProfileStringA` | INI read (localStorage-backed string, classic INI semantics, case-insensitive) |
-| `WritePrivateProfileStringA` | INI write (persist to localStorage on every call) |
-| `lstrlenA` / `lstrcpyA` / `lstrcmpiA` | strlen / strcpy / strcasecmp (return int) |
+| `FreeLibrary` | no-op, return 1; the sound-module handle g_c78c is always 0 (static import, ski_game.h:83) |
+| `FindResourceA` | called **only** with type "WAVE" (9 sound ids, ski_core.c:174); must return NULL — the PE has no WAVE resource node, so the game is silent by construction |
+| `LoadResource` | reachable only if `FindResourceA` returns non-NULL → unreachable; stub that returns its input (ski_core.c:177) |
+| `LockResource` | unreachable for the same reason (ski_core.c:179) |
+| `FreeResource` | unreachable (ski_sound_free path, ski_core.c:192); no-op |
+| `GetPrivateProfileStringA` | INI read: "entpack.ini", section "Ski", 10-entry high-score panels, 0x100 buffer (ski_core.c:2744); localStorage-backed, classic INI semantics, case-insensitive |
+| `WritePrivateProfileStringA` | INI write, same file/section (ski_core.c:2789); persist to localStorage on every call |
+| `lstrlenA` | strlen |
+| `lstrcpyA` | strcpy |
+| `lstrcmpiA` | case-insensitive strcmp; the WinMain "nosound" gate (ski_win.c:858) |
 
 ## winmm (1)
 
 | symbol | what it must do |
 |---|---|
-| `PlaySoundA` | M1 answer: no RT_WAVE in the PE — the named sounds come from the *system* (Wine's system sounds). The game's `nosound` gate (c794) + the rebuild's silent-by-construction behavior ⇒ implement as a no-op (console log). See NOTES M1 sound answer before adding real audio. |
+| `PlaySoundA` | no-op (console log). Must be a real linkable function: `ski_sound_init` takes its **address** into g_c790 (ski_core.c:165) and later calls it through the pointer — stop (NULL,NULL,0) at ski_core.c:203, play (ptr,NULL,0x8000) at ski_core.c:414 (unreachable: no WAVE resource exists). The original imports the WINMM alias `sndPlaySoundA`; the rebuild calls `PlaySoundA` — the shim exports the standard name |
 
-## Sprite model (LoadBitmapA + the resource triplet)
+## Harness-only additions (SKI_HARNESS=1, T21 WASM diff build) — +2
 
-The original loads the 89 sprites as RT_BITMAP resources (1/4/8bpp DIBs)
-via FindResourceA/LoadResource/LockResource, then builds 8bpp
-palette-based sprite strips. The shim must therefore model a
-**palette-bearing bitmap**: `ShimBmp { w, h, bpp, pal[256×RGB], px[] }`
-where px is indexed (1/4/8bpp) — the BitBlt path expands indices through
-the palette. `harness/embed_sprites.py` (Task 20) decodes
-`web/assets/sprites/bmp_NNN.png` (Pillow) into static RGB/palette arrays
-+ a table keyed by resource id; `LoadBitmapA`/`FindResourceA` resolve
-against it. The palette is part of the DIB (verified in T6 extraction —
-`resources.json` carries bitcount + palette).
+| symbol | DLL | what it must do |
+|---|---|---|
+| `CreateDIBSection` | gdi32 | w×h 32bpp DIB + out-ptr (tick-frame dump, ski_core.c:2547); NOT in the original IAT (the stub resolved it via GetProcAddress) |
+| `GetProcessId` | kernel32 | return any fixed pid (wproc trace header line, ski_win.c:584) |
+
+## Sprite model (verified against `decompile/ghidra/FUN_00405ab0.c` + `ski_load_bitmaps`)
+
+`game_sprites_load` (0x405ab0) loads the 89 sprites via `LoadBitmapA`
+(ids 1..0x59; each a 1/4/8bpp DIB — `resources.json` from the T6 extraction
+carries bitcount + palette). It then builds two strip families:
+
+- **Image strips** — `CreateCompatibleBitmap` vs the window DC (32bpp in the
+  shim): small strip 0x20×h (c710, sprites with w < 0x21), big strip
+  max_w×h (c730).
+- **Mask strips** — `CreateBitmap(w, h, 1, 1, NULL)` (1bpp): small (c6a4),
+  big (c6ec).
+- **Canvas** (c5ec) — `CreateCompatibleBitmap`, aligned
+  ((max_w & 0xffc0)+0x40) × ((max_h & 0xffc0)+0x40).
+
+Each sprite is blitted into its image strip with SRCCOPY (0xCC0020) and into
+its mask strip with MASKPEN (0x330008). The shim's `BitBlt` must therefore
+reproduce Win32 GDI's DIB expansion exactly: palette-index → RGB for the
+32bpp image strips, and DIB → 1bpp for the mask strips under MASKPEN.
+M2's 0-px frame parity against the original (real GDI on both sides) is the
+acceptance gate for these conversions.
 
 ## Debug hooks (Task 18/21, NOT in the symbol list)
 
@@ -113,11 +187,21 @@ dataURL of window n's framebuffer), `window.__ski = createSki()` boot.
 ## Build notes
 
 - Entry: emscripten needs `main`; the shim provides a wrapper
-  `int main(void) { return WinMain(0, 0, 0, 1); }` (WinMain's HINSTANCE
-  args are unused by the game except for the NULL-hPrev re-register
-  guard — pass a non-NULL dummy for hInstance so the class registration
-  runs, and hPrev = NULL).
-- `-sENVIRONMENT=web -sMODULARIZE=1 -sEXPORT_NAME=createSki`
-  (already in CMakeLists).
+  `int main(void) { return WinMain(hInst, NULL, cmd, 1); }` with a
+  non-NULL dummy hInst — class registration is gated on hPrev == NULL
+  (ski_win.c:807), so pass hPrev = NULL to make it run.
 - `#include <windows.h>` resolves to `shim/windows.h` via `-I shim`
   (the game sources are unmodified).
+- `-sENVIRONMENT=web -sMODULARIZE=1 -sEXPORT_NAME=createSki`
+  (already in CMakeLists).
+- **Harness build prerequisites (verified by the 2026-08-31 harness probe;
+  currently missing from the shim, so the probe supplied them from
+  the command line):**
+  1. `VK_*` macros (12): LEFT 0x25, RIGHT 0x27, UP 0x26, DOWN 0x28,
+     NUMPAD0 0x60, NUMPAD1 0x61, NUMPAD3 0x63, NUMPAD7 0x67, NUMPAD9 0x69,
+     F2 0x71, F3 0x72, RETURN 0x0d — consumed via `ski_keys.h`
+     (ski_core.c:2474, table at 2484).
+  2. `BI_RGB` (0) — `BITMAPINFOHEADER.bmiCompression` in the CreateDIBSection
+     path (ski_core.c:2547).
+  3. `<stdlib.h>` — the harness-only ski_win.c:89/93/243 calls `getenv`/
+     `strtoul`; `shim/windows.h` (or a shim include) must provide it.
