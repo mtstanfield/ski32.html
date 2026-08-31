@@ -66,7 +66,17 @@ if(NOT EMSCRIPTEN)
   enable_testing()
   add_executable(test_surface test/test_surface.c shim/surface.c)
   target_include_directories(test_surface PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} shim)
-  add_test(NAME surface COMMAND test_surface)
+  if(SKI_CC_MINGW GREATER -1)
+    # The i686 mingw driver appends .exe to an extensionless -o name, but
+    # CMake (which sees no cross-compile on this host) does not detect
+    # that: pin the suffix so the recorded target file matches what the
+    # linker actually writes.
+    set_target_properties(test_surface PROPERTIES SUFFIX ".exe")
+  endif()
+  # $<TARGET_FILE:...> instead of a bare target name: on a non-Windows
+  # host a bare name resolves without the .exe suffix and ctest cannot
+  # find the cross-built binary.
+  add_test(NAME surface COMMAND $<TARGET_FILE:test_surface>)
   if(SKI_NATIVE_HOST)
     # Host tests run natively: prove clipping does not overflow (ASan) and
     # keep the build warning-clean.
