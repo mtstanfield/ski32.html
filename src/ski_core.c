@@ -1337,10 +1337,16 @@ void ski_gate_idx_reset(void)
     g_c702 = 0;
 }
 
-/* 0x403a00 — pairwise collision. Byte views here (Ghidra): +0x10 = x,
- * +0x11 = mode, +0x12 = speed, +0x13 = flags low byte; int-cast offsets
- * (+0x42 y, +0x46 steer, +0x4a transition) are real. colptr +0x0a = w,
- * +0x0c = h. Disasm-verified. */
+/* 0x403a00 — pairwise collision (a=e1, b=e2; dispatch on a->type via the
+ * table @0x403fd4). Derived values at dispatch (0x403a3e-0x403ac0):
+ *   bx = a->mode, cx = b->mode,
+ *   bp = b->colptr->h + b->mode  ("top2"),
+ *   ax = a->colptr->h + a->mode,
+ *   [esp+0x10] = a->frame, [esp+0x14] = b->type, [esp+0x18] = sep, where
+ *   sep = 0 iff (a->y-b->y) and (head(a)->y-head(b)->y) have the same sign
+ *   (0x403a66-0x403a95). Entity offsets are the real int ones (+0x10 col,
+ *   +0x18 type, +0x40 x, +0x42 y, +0x44 mode, +0x48 speed, +0x4a
+ *   transition); colptr +0x0a = w, +0x0c = h. Disasm-verified. */
 ski_ent_t *ski_collide(ski_ent_t *e1, ski_ent_t *e2)
 {
     if (e1 == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0x92e);
@@ -1496,6 +1502,15 @@ ski_ent_t *ski_collide(ski_ent_t *e1, ski_ent_t *e2)
         }
         break;
     case 3:
+        /* 0x403eb4: cl = map[b->type] @0x404054; jmp [0x404044+cl*4].
+         * cl=0 (b=player, 0x403f0b): +20 pts, falls into the cl=1 test.
+         * cl=1 (b=1,3,0xd,0xe; 0x403f15): a->mode < h_b+mode_b
+         *      (0x403f15 cmp %bp,%bx = bx-a->mode vs bp-colptr_h+mode)
+         *      and frame != 0x22 -> frame 0x22.
+         * cl=2 (b=0xf,0x10; 0x403ed0): a->mode < h_b+mode_b
+         *      -> transition = speed/2 (cltd;sub;sar = C div),
+         *      snd5 (0x40c750), frame 0x21.
+         * cl=3 (b=2,4..0xc; 0x403fc1): no-op. */
         switch (type2) {
         case 0:
             ski_score_add(0x14);
@@ -1503,12 +1518,12 @@ ski_ent_t *ski_collide(ski_ent_t *e1, ski_ent_t *e2)
         case 3:
         case 0xd:
         case 0xe:
-            if (y1 < top2 && frame != 0x22)
+            if (mode1 < top2 && frame != 0x22)
                 return ski_set_frame(e1, 0x22);
             break;
         case 0xf:
         case 0x10:
-            if (y1 < top2) {
+            if (mode1 < top2) {
                 e1->transition = (uint16_t)((int16_t)e1->speed / 2);
                 ski_snd_play(&ski_sound_5);
                 return ski_set_frame(e1, 0x21);

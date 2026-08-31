@@ -2304,3 +2304,81 @@ build-native-harness/ski.exe, harness/diff.py tol=0, status-panel mask)
   c698 advances across 3 samples (300 ms apart) before trusting the dump.
 - Disk: ~1.35 GB of PPMs per 800-tick run; delete frame dirs immediately
   after each diff (the volume hit 100% full twice this session).
+
+## S06 — s06_longrun: ski_collide case 3 (snowboarder) mis-transcribed (2026-08-31)
+
+### Symptom
+The T16-reported "rebuild dies at 2899/3000" does NOT reproduce on master
+(2d28e57) nor the T16 worktree (ee679f8): three fresh builds (old binary,
+fresh HEAD, worktree) all complete s06_longrun 3005 frames, exit 0, and
+diff 0px against each other. The reproducible s06 failure is a pixel
+divergence, not a crash: original (/tmp/s06o) vs HEAD rebuild (/tmp/s06h1):
+2190/3005 frames failing, worst=13575px, FIRST DIVERGENCE frame 815 —
+original's snowboarder mid-tumble (crash pose), rebuild's upright.
+
+### Triage (branch A: pre-crash pixel divergence)
+- Bisected ticks 795-820: identical through 814, diverge at 815.
+- Divergence bbox (255,291)-(284,320) = one sprite: the snowboarder.
+- Rebuild state trace (SKI_DBG_FULL) at tick 815: snowboarder 0035c180
+  col=38 type=3 fr=0x20 y=3168 mode=0 speed=18; pine 0035c3b0 col=49
+  type=0xd y=3192 mode=0 (colptr h=32). Screen rects at 814
+  [263,279,283,309] vs [263,319,291,351] (no overlap); at 815
+  [260,291,280,321] vs [251,313,279,345] (overlap) -> the pass-2
+  collide fires on exactly this pair at 815.
+- Live /proc/<pid>/mem observer on the original (pure observation, 4ms
+  poll; caught tick ~880+ after late attach) confirms the original's
+  snowboarder had entered the 0x22 tumble and the player had crashed
+  shortly after (fr=12, py=3469, stationary).
+
+### Root cause — ski_collide case 3 (0x403eb4): mode vs y mixup
+Original: cl = map[b->type] @0x404054; jmp [0x404044+cl*4]:
+  cl=0 (b=player; 0x403f0b): +20 pts, then the cl=1 test.
+  cl=1 (b=1,3,0xd,0xe; 0x403f15): a->mode < b->colptr->h+b->mode AND
+      frame != 0x22 -> frame 0x22 (crash/tumble sequence).
+  cl=2 (b=0xf,0x10; 0x403ed0): a->mode < b->colptr->h+b->mode ->
+      transition = speed/2, snd5 (0x40c750), frame 0x21.
+  cl=3 (b=2,4..0xc; 0x403fc1): no-op.
+Both tests are `cmp %bp,%bx` (0x403f15 / 0x403ed0) where the prologue
+(0x403a3e-0x403ac0) left bx = a->mode and bp = b->colptr->h + b->mode.
+The rebuild compared `e1->y < top2` (3168 < 32 -> false): the 0x22 crash
+frame never fired, the snowboarder rode upright through the pine, and the
+run diverged from frame 815 (original player crashes ~879, rebuild's
+~1034; different end trees, Dist 325 vs 291). The function's old header
+carried a WRONG Ghidra byte view ("+0x10 = x, +0x11 = mode, +0x12 =
+speed") — that is where the y/mode mixup was introduced.
+
+### Full-function audit (fresh decode of the pristine PE)
+Re-disassembled 0x403a00-0x403fd4 from original/ski32.exe; all table data
+read as raw bytes (objdump mis-decodes the data areas): main dispatch
+@0x403fd4 (a->type), case-0 sub-table @0x404000 (idx = b->type-1,
+b=1..0x11), snowboarder map @0x404054 + jmp @0x404044. Verified 1:1:
+prologue sep logic (0x403a66-0x403a95 — sep=0 iff (a->y-b->y) and
+(head(a)->y-head(b)->y) have the same sign); case 0 incl. every sub-case
+(0x403bb3 b=0xf; 0x403c00 b=2/0xc/0x11; 0x403c3d b=0xb; 0x403c84 b=0x10;
+0x403ce3 b=0xe; 0x403d3e skier cases b=1,3,4,9,0xa,0xd; the b=0xd width
+rule max(w_a,w_b)/2 vs |x_a-x_b| at 0x403d63; banner-kill tail 0x403e60);
+case 1 (0x403f44), case 2 (0x403f77), 4/9 no-op, 5-8 yeti-kill
+(0x403af4), 10 (0x403ad3). Note: the `cltd; sub %edx; sar $1` sequences
+are the C-division (toward-zero) idiom, NOT b->type subtractions — the
+rebuild's plain `speed / 2` was already correct there. The ONLY bug in
+the function was case 3's two `y1 < top2` comparisons.
+
+### Fix (2 lines + comments, src/ski_core.c)
+- case 3: `y1 < top2` -> `mode1 < top2` in both the cl=1 and cl=2 tests;
+  comment block cites 0x403eb4/0x403f0b/0x403f15/0x403ed0 and the tables.
+- Replaced the wrong Ghidra header comment with the real dispatch state
+  (bx/cx/ax/bp at 0x403acc) and entity/colptr offsets.
+
+### Verification (SKI_NO_ACTIVATE=1, fresh /tmp/orig_t15.exe via
+stub_patch, build-native-harness/ski.exe, harness/diff.py tol=0,
+status-panel mask (620,0)-(760,60))
+- s06_longrun:      3005 frames, 0 failing, worst=0px -> PASS (was 2190 failing)
+- s06 determinism:  rebuild run 2 vs run 1: 3006 frames, 0 failing -> PASS
+- s01_menu:         304 frames, 0 failing, worst=0px -> PASS
+- s02_start:        403 frames, 0 failing, worst=0px -> PASS
+- s03_steering:     807 frames, 0 failing, worst=0px -> PASS
+- s04_crouch:       403 frames, 0 failing, worst=0px -> PASS
+- House flags (-O2 -mfpmath=387 -Wall): zero warnings in ski_core.c and
+  ski_win.c. The build log's one remaining warning is -Wstrict-aliasing
+  in ski_set_frame (ski_core.c:641) — a default-at-O2 warning, not a
+  -Wall warning, pre-existing, untouched here.
