@@ -2195,8 +2195,13 @@ confirmed):
 ## T16 — original-side stub key-injection bug (eax clobber): s05 root cause (2026-08-30)
 
 ### Symptom
-After the T15 fixes (stub indirect-call fix, Xvfb 768x768, no-activate mode),
-s03_steering passed 0px but s05_modes still diverged at tick 201 — the 7-key
+In the T15 suite run the stub's key injection was broken: `call
+[wproc_main]` encodes an INDIRECT call through the WndProc's own code bytes
+-> AV on every non-zero word -> the original ran effectively keyless, which
+masqueraded as the s03/s05/s08 "collision divergence". After the direct-call
+fix `call wproc_main` (committed in this same T16), plus Xvfb 768x768 and
+no-activate mode, s03_steering passed 0px but s05_modes still diverged at
+tick 201 — the 7-key
 word (up,down,crouch,f1,f3,f7,f9, bits 2..8). Pixel-confirmed ground truth
 (terrain scroll per tick, frames 198-209): both sides 12px/tick through 200;
 at 201+ the ORIGINAL kept 12px/tick (no decel) while the REBUILD decayed
@@ -2224,7 +2229,8 @@ whole word; the rebuild applied it.
   0xd..0x15->landing 0x402aab, land table @0x40a434 bytes exact);
   ski_entity_step 0x402be0 incl. the c670 double-move quirk; WndProc key
   routing (0x100 -> c67c gate 0x40594d -> 0x406170 -> first switch
-  idx @0x4063bc / jt @0x4063a8; all 7 game VKs -> idx 4 -> 0x4061b1);
+  idx @0x4063bc / jt @0x4063a8; all 9 stub game VKs (left right up down
+  crouch f1 f3 f7 f9) -> idx 4 -> 0x4061b1);
   the mouse-click crouch action 0x4066d0 (WM_LBUTTONDOWN 0x201 /
   WM_RBUTTONDOWN 0x203 cases, c67c-gated; rebuild already has it as
   ski_click_action and it is inert in no-activate runs).
@@ -2249,7 +2255,7 @@ switch frames {3,7,0xc,6,8,0xd,0xe,0xf,0x12,0x13}).
   between uses esi).
 - `.bit:` loop: `test eax,ecx` -> `test esi,ecx` (TEST is commutative for
   ZF; nasm emits 85 ce = TEST esi,ecx).
-Bin grew 2165 -> 2167 B; regenerated /tmp/orig_t15.exe via
+Bin grew 2166 -> 2167 B; regenerated /tmp/orig_t15.exe via
 `python3 harness/stub_patch.py /tmp/orig_t15.exe`; verified deployed bytes
 == orig_stub.bin (2167 B at file offset 0x96ac, cmp exact).
 
