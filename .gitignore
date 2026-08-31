@@ -8,5 +8,6 @@ harness/.venv/
 build-native/
 build-wasm/
 build-native-harness/
+build-test/
 harness/strprobe/*.exe
 original/ski32_fixed*.exe
