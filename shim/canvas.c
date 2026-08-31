@@ -229,8 +229,15 @@ EMSCRIPTEN_KEEPALIVE void ski_key_event(unsigned vk, int down)
     if (!w || !down)
         return; /* the binary has no WM_KEYUP path: up events are no-ops */
     shim_post((HWND)w, WM_KEYDOWN, (unsigned long)vk, 0);
-    if (vk >= 0x20 && vk < 0x7f)
-        shim_post((HWND)w, WM_CHAR, (unsigned long)vk, 0); /* char == vk */
+    /* The game's char handler (ski_char_key) takes lowercase codes only;
+     * derive the char from the VK (A-Z: vk|0x20, 0-9: vk+0x1E). Posting
+     * the raw VK as char would, e.g. map 'r' to 0x52 ('R', unhandled)
+     * while passing the char code would make WM_KEYDOWN hit the VK_F3
+     * pause case (ski_win.c:266). */
+    if (vk >= 'A' && vk <= 'Z')
+        shim_post((HWND)w, WM_CHAR, (unsigned long)(vk | 0x20), 0);
+    else if (vk >= '0' && vk <= '9')
+        shim_post((HWND)w, WM_CHAR, (unsigned long)(vk + 0x1E), 0);
 }
 
 EMSCRIPTEN_KEEPALIVE void ski_click(unsigned x, unsigned y)

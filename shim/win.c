@@ -86,6 +86,7 @@ static int    g_ticks_fired;  /* game-timer dispatches (== g_ski_tick) */
 static int    g_timer_armed;
 static UINT   g_tick_id;
 static UINT   g_timer_period;
+static TIMERPROC g_timer_fn;  /* Win32 callback timer proc (ski_tick_cb) */
 static double g_next_real;    /* emscripten_get_now() ms deadline of next fire */
 
 /* ---- message queue (ring; WM_PAINT is not queued — see mq_pop) --------- */
@@ -142,6 +143,13 @@ static LRESULT dispatch1(const MqMsg *m)
     if (m->msg == WM_TIMER && w == g_hmain && m->wp == g_tick_id) {
         g_now_ms += g_timer_period; /* virtual clock: advances per fire */
         g_ticks_fired++;
+        /* Win32 callback timer: the system invokes the TIMERPROC directly
+         * and never posts WM_TIMER to the WndProc; the game's wproc has no
+         * WM_TIMER case (decompile FUN_00405800). The callback (ski_tick_cb,
+         * ski_win.c:110) gates on c67c and calls ski_tick. */
+        if (g_timer_fn)
+            return g_timer_fn((HWND)w, m->wp, WM_TIMER, GetTickCount());
+        return 0;
     }
     if (w && !w->dead && w->proc)
         return w->proc((HWND)w, m->msg, m->wp, m->lp);
@@ -421,7 +429,8 @@ BOOL KillTimer(HWND h, UINT id)
 
 UINT SetTimer(HWND h, UINT id, UINT ms, TIMERPROC fn)
 {
-    (void)h; (void)fn; /* WM_TIMER is handled by the window's wproc */
+    (void)h;
+    g_timer_fn = fn; /* callback timer: the pump invokes fn per fire */
     if (!g_timer_armed)
         g_next_real = emscripten_get_now() + (double)ms;
     g_timer_armed = 1;
