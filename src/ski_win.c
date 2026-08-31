@@ -726,11 +726,19 @@ static void status_paint(HWND h)
 {
     PAINTSTRUCT ps;
     BeginPaint(h, &ps);
-    HBRUSH hbr = (HBRUSH)GetStockObject(4); /* stock 4: out of the valid
-                                             * range (5..14) -> NULL under
-                                             * real GDI; FrameRect no-ops */
+    /* stock 4: under wine (the reference) a solid BLACK brush — FrameRect
+     * draws the 1px black ring around the panel (verified in original
+     * frames: (0,0,0) at panel rows 0/51, cols 0/122). Real-GDI "out of
+     * range -> NULL" was the disproven T16 note. */
+    HBRUSH hbr = (HBRUSH)GetStockObject(4);
     FrameRect(ps.hdc, &g_c778, hbr);
-    short cursor[2] = { 2, 0 }; /* x, y */
+    /* y starts at 2: the prologue (0x40697d) writes DWORD 0x00000002 into the
+     * y slot and x=2 is pushed per call (0x4069c2); Ghidra rendered that
+     * single DWORD as short[2] {2,0} — the misread shipped T12 and left the
+     * labels 2px above the values (invisible to M2: the diff masks the
+     * panel). Verified against original pixels (T at row 4 -> pen row 2)
+     * and a 0/6050px panel simulation (M3 T19 follow-up). */
+    short cursor[2] = { 2, 2 }; /* x, y */
     const UINT ids[4] = { STR_TIME, STR_DIST, STR_SPEED, STR_STYLE };
     for (int i = 0; i < 4; i++) {
         const char *s = ski_str_cache(ids[i]);

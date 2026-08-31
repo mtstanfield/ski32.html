@@ -776,13 +776,22 @@ Moving list (c720, `game_gate_update` 0x4040a0 — moves every tick):
   0x405800, icon "iconSki"; `SkiStatus` WndProc `wproc_status` 0x4068d0. The
   `button` string (a1a4) is dead .rdata (never registered).
 - `wproc_status` 0x4068d0: WM_CREATE → 0x406a70 (`c6cc = GetDC(hwnd)`,
-  `c664 = SelectObject(c6cc, GetStockObject(10) = OEM_FIXED_FONT)` — disasm
-  0x406a95 `push 0xa`; `c664` then holds the previously-selected HGDIOBJ;
-  GetTextMetricsA → `c668` tmHeight, measures RT strings 3-10 → panel widths
-  `c66c` (left+right) / `c66a`); WM_SIZE → `GetClientRect → c778`;
-  WM_PAINT → 0x406970 (`BeginPaint`; `FrameRect(hdc, &c778, GetStockObject(4)
-  = BLACK_BRUSH)`; TextOut 4 labels RT 3-6 at x=2 advancing y by `c668` each via
-  0x401e20; then `draw_status_values(paint hdc)`; EndPaint).
+  `c664 = SelectObject(c6cc, GetStockObject(10))` — disasm
+  0x406a95 `push 0xa`; under wine 9.0 (the reference) stock 10 resolves to a
+  12px MONOSPACE TTF (empty face, lfHeight 12, weight 400; tmHeight 12, every
+  ASCII advance 7, tmMaxCharWidth 13) which becomes the status DC's current
+  font — a wine quirk, NOT a brush (real Win32: 10 = NULL_PEN); this is the
+  font captured into web/assets/font.json (M3 T19); `c664` then holds the
+  previously-selected HGDIOBJ; GetTextMetricsA → `c668` tmHeight, measures RT
+  strings 3-10 → panel widths `c66c` (left+right) / `c66a`); WM_SIZE →
+  `GetClientRect → c778`;
+  WM_PAINT → 0x406970 (`BeginPaint`; `FrameRect(hdc, &c778,
+  GetStockObject(4))` — wine stock 4 is a black brush → the 1px black ring
+  around the panel; x=2 is pushed per call (0x4069c2 `push $0x2`) and y starts
+  at 2 (prologue 0x40697d `movl $0x2` into the y slot — Ghidra's
+  `short[2] {2,0}` is a misread of that DWORD; src bug fixed M3 T19
+  follow-up); TextOut 4 labels RT 3-6 at x=2, y=2+12i, via 0x401e20; then
+  `draw_status_values(paint hdc)` (values at x=44, y=2+12i); EndPaint).
 - Reposition: `wproc_status_reposition` 0x406890 — `nWidth = (short)c66c + 4;
   MoveWindow(c624, c6b8 - nWidth, c6b4, nWidth, (short)c66a + 4, 1)` — called from
   `wproc_main`'s WM_SIZE (0x405800:34) when `c624 != 0`. Child coords: right edge at
