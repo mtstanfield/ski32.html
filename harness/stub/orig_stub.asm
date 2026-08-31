@@ -721,10 +721,10 @@ orig_stub_entry:
                                      ; no-access reservation) as the target
                                      ; -> AV on every key tick. The AV storm
                                      ; left the instrumented original
-                                     ; effectively
-                                     ; keyless (words degraded to 0 after the
-                                     ; first non-zero word), which masqueraded
-                                     ; as an s03/s05/s08 gameplay divergence.
+                                     ; effectively keyless (words degraded to
+                                     ; 0 after the first non-zero word), which
+                                     ; masqueraded as an s03/s05/s08
+                                     ; gameplay divergence.
                                      ; stdcall (ret 0x10): esp auto-restored
     mov  ebp, [HOME1]                ; wproc clobbers ebp: recover page base
     mov  dword [ebp+o_stage], 12
