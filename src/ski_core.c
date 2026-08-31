@@ -1343,10 +1343,13 @@ void ski_gate_idx_reset(void)
  *   bp = b->colptr->h + b->mode  ("top2"),
  *   ax = a->colptr->h + a->mode,
  *   [esp+0x10] = a->frame, [esp+0x14] = b->type, [esp+0x18] = sep, where
- *   sep = 0 iff (a->y-b->y) and (head(a)->y-head(b)->y) have the same sign
- *   (0x403a66-0x403a95). Entity offsets are the real int ones (+0x10 col,
- *   +0x18 type, +0x40 x, +0x42 y, +0x44 mode, +0x48 speed, +0x4a
- *   transition); colptr +0x0a = w, +0x0c = h. Disasm-verified. */
+ *   sep = 0 iff (a->y-b->y) and (head(a)->y-head(b)->y) have the same
+ *   sign (or are both zero) (0x403a66-0x403a95). The decompiler
+ *   mis-rendered the entity offsets in the old view of this function
+ *   (claiming +0x10/+0x11/+0x12 = x/mode/speed); that wrong view caused
+ *   the case-3 y/mode mixup (S06, 2026-08-31). The real int offsets:
+ *   +0x10 col, +0x18 type, +0x40 x, +0x42 y, +0x44 mode, +0x48 speed,
+ *   +0x4a transition; colptr +0x0a = w, +0x0c = h. Disasm-verified. */
 ski_ent_t *ski_collide(ski_ent_t *e1, ski_ent_t *e2)
 {
     if (e1 == NULL) ski_assert_fail(SKI_ASSERT_FILE, 0x92e);
@@ -1505,7 +1508,8 @@ ski_ent_t *ski_collide(ski_ent_t *e1, ski_ent_t *e2)
         /* 0x403eb4: cl = map[b->type] @0x404054; jmp [0x404044+cl*4].
          * cl=0 (b=player, 0x403f0b): +20 pts, falls into the cl=1 test.
          * cl=1 (b=1,3,0xd,0xe; 0x403f15): a->mode < h_b+mode_b
-         *      (0x403f15 cmp %bp,%bx = bx-a->mode vs bp-colptr_h+mode)
+         *      (0x403f15 cmp %bp,%bx: bx = a->mode vs
+         *      bp = partner colptr_h + mode_b)
          *      and frame != 0x22 -> frame 0x22.
          * cl=2 (b=0xf,0x10; 0x403ed0): a->mode < h_b+mode_b
          *      -> transition = speed/2 (cltd;sub;sar = C div),

@@ -2353,7 +2353,7 @@ read as raw bytes (objdump mis-decodes the data areas): main dispatch
 @0x403fd4 (a->type), case-0 sub-table @0x404000 (idx = b->type-1,
 b=1..0x11), snowboarder map @0x404054 + jmp @0x404044. Verified 1:1:
 prologue sep logic (0x403a66-0x403a95 — sep=0 iff (a->y-b->y) and
-(head(a)->y-head(b)->y) have the same sign); case 0 incl. every sub-case
+(head(a)->y-head(b)->y) have the same sign, or are both zero); case 0 incl. every sub-case
 (0x403bb3 b=0xf; 0x403c00 b=2/0xc/0x11; 0x403c3d b=0xb; 0x403c84 b=0x10;
 0x403ce3 b=0xe; 0x403d3e skier cases b=1,3,4,9,0xa,0xd; the b=0xd width
 rule max(w_a,w_b)/2 vs |x_a-x_b| at 0x403d63; banner-kill tail 0x403e60);
