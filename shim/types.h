@@ -87,7 +87,6 @@ typedef TEXTMETRICS TEXTMETRICA;
 /* --- constants (only those the game uses) --- */
 #define TRUE  1
 #define FALSE 0
-#define NULL_PTR 0
 
 #define WM_NULL         0x0000
 #define WM_CREATE       0x0001
@@ -135,24 +134,28 @@ typedef TEXTMETRICS TEXTMETRICA;
 #define PATINVERT       0x005A0049
 #define DSTINVERT       0x550009
 #define NOTSRCCOPY      0x330008
-#define NOTDESTINATOR   0x00F000CA
-#define BLACKNESS2      0x00000042
+#define NOTDESTINATION  0x00550009
 #define CAPTUREBLT      0x40000000
 
 #define DIB_RGB_COLORS  0
 #define DIB_PAL_COLORS  1
 
-#define WHITE_BRUSH     5
-#define LTGRAY_BRUSH    6
-#define GRAY_BRUSH      7
-#define DKGRAY_BRUSH    8
-#define BLACK_BRUSH     0
-#define NULL_BRUSH      5 + 5
-#define HOLLOW_BRUSH    5 + 5
-#define WHITE_PEN       6
-#define BLACK_PEN       0
-#define NULL_PEN        5
-#define DEFAULT_GUI_FONT 12
+/* Stock objects: real Win32 indices (5..14). The game passes RAW literals
+ * 0, 4, 10 (ski_win.c:775/729/686) — 0 and 4 are OUT of range, so real GDI
+ * returns NULL for them (the FillRect/FrameRect calls no-op; the M2
+ * reference has no status-panel frame); 10 = BLACK_BRUSH (SelectObject'd
+ * into the status DC, never drawn with). */
+#define WHITE_BRUSH     6
+#define LTGRAY_BRUSH    7
+#define GRAY_BRUSH      8
+#define DKGRAY_BRUSH    9
+#define BLACK_BRUSH     10
+#define NULL_BRUSH      5
+#define HOLLOW_BRUSH    5
+#define WHITE_PEN       11
+#define BLACK_PEN       12
+#define NULL_PEN        13
+#define DEFAULT_GUI_FONT 13
 
 #define HORZRES         8
 #define VERTRES         10
@@ -169,7 +172,6 @@ typedef TEXTMETRICS TEXTMETRICA;
 #define IDRETRY         4
 #define IDYES           6
 #define IDNO            7
-#define IDOKAY          1
 
 #define GDI_ERROR       ((UINT)-1)
 #define INVALID_HANDLE_VALUE ((HANDLE)(long long)-1)

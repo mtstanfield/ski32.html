@@ -1181,7 +1181,7 @@
  },
  "wave_resources": {
   "addr": "0x40d000",
-  "type": "9 RT_WAVE resources (ids 1-9) in .rsrc",
+  "type": "9 WAVE pair structs (ids 1-9) in .data — the PE .rsrc has no RT_WAVE node, so FindResourceA(..., \"WAVE\") always returns NULL (silent by construction)",
   "refs": [
    "snd_load_wave"
   ],

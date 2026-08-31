@@ -2852,7 +2852,7 @@ static uint32_t ski_offscreen_resize(uint16_t w, uint16_t h)
 
 /* 0x401540 — draw one merged group: repeatedly pick the bottom-most
  * drawable entity (off = y - (flags & 0x40 ? col height : 0)), blit it
- * onto the canvas (mask MERGECOPY + image SRCCOPY, or image SRCPAINT on
+ * onto the canvas (mask SRCOR + image SRCAND, or image SRCCOPY on
  * the first draw after a canvas clear), flag it and unlink it; flag-2
  * nodes are unlinked inline (flag 1 cleared -> canvas needs clearing).
  * The canvas is then composited back to the window at the group bbox. */
@@ -2898,7 +2898,7 @@ static void draw_entity(HDC hdc, ski_ent_t *e)
                     const int32_t *r = (f & 4) ? q->rect : ski_entity_rect(q);
                     BitBlt(hdc, r[0], r[1], (int)(short)c->width,
                            (int)(short)c->height, c->img_dc,
-                           0, (int)(short)c->yoff, 0x8800c6 /* SRCCOPY */);
+                           0, (int)(short)c->yoff, 0x8800c6 /* SRCAND */);
                     q->flags = f | 1;
                 }
             } else if ((f & 2) != 0) {
@@ -2974,12 +2974,12 @@ static void draw_entity(HDC hdc, ski_ent_t *e)
                     PatBlt(g_c5ec, 0, 0, (int)(short)cw, (int)(short)ch,
                            0xff0062 /* BLACKNESS */);
                 BitBlt(g_c5ec, dx, dy, colw, colh, c->img_dc, 0, yoff,
-                       0xcc0020 /* SRCPAINT */);
+                       0xcc0020 /* SRCCOPY */);
             } else {
                 BitBlt(g_c5ec, dx, dy, colw, colh, c->mask_dc, 0, yoff,
-                       0xee0086 /* MERGECOPY */);
+                       0xee0086 /* SRCOR */);
                 BitBlt(g_c5ec, dx, dy, colw, colh, c->img_dc, 0, yoff,
-                       0x8800c6 /* SRCCOPY */);
+                       0x8800c6 /* SRCAND */);
             }
             best->flags |= 1;
             *best_link = best->gnext; /* unlink the drawn entity */
@@ -2994,7 +2994,7 @@ static void draw_entity(HDC hdc, ski_ent_t *e)
          * behavior (scene visible at the group bbox). */
         BitBlt(hdc, (int)(short)x1, (int)(short)y1,
                (int)(short)cw, (int)(short)ch, g_c5ec, 0, 0,
-               0xcc0020 /* SRCPAINT */);
+               0xcc0020 /* SRCCOPY */);
         return;
     }
     if (cleared != 0) {

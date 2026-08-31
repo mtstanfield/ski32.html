@@ -22,7 +22,7 @@ HWND           SetFocus(HWND h);
 BOOL           InvalidateRect(HWND h, const RECT *rc, BOOL erase);
 BOOL           KillTimer(HWND h, UINT id);
 UINT           SetTimer(HWND h, UINT id, UINT ms, TIMERPROC fn);
-PAINTSTRUCT *  BeginPaint(HWND h, PAINTSTRUCT *ps);
+BOOL           BeginPaint(HWND h, PAINTSTRUCT *ps);
 BOOL           EndPaint(HWND h, const PAINTSTRUCT *ps);
 HDC            GetDC(HWND h);
 int            ReleaseDC(HWND h, HDC dc);
@@ -39,9 +39,10 @@ HCURSOR        LoadCursorA(HINSTANCE inst, LPCSTR name);
 HICON          OpenIcon(HICON icon);
 int            MessageBoxA(HWND owner, LPCSTR text, LPCSTR caption, UINT type);
 int            LoadStringA(HINSTANCE inst, UINT id, LPSTR buf, int max);
-DWORD          GetProcessId(HANDLE proc);
 void *         LoadBitmapA(HINSTANCE inst, LPCSTR name);
 int            wsprintfA(LPSTR buf, LPCSTR fmt, ...);
+BOOL           FillRect(HDC dc, const RECT *rc, HBRUSH brush);
+BOOL           FrameRect(HDC dc, const RECT *rc, HBRUSH brush);
 
 /* ---- gdi32: surfaces ---- */
 HDC            CreateCompatibleDC(HDC ref);
@@ -57,8 +58,6 @@ BOOL           BitBlt(HDC dst, int x, int y, int w, int h,
                       HDC src, int sx, int sy, DWORD rop);
 BOOL           PatBlt(HDC dc, int x, int y, int w, int h, DWORD rop);
 HBRUSH         GetStockObject(int idx);
-BOOL           FillRect(HDC dc, const RECT *rc, HBRUSH brush);
-BOOL           FrameRect(HDC dc, const RECT *rc, HBRUSH brush);
 BOOL           TextOutA(HDC dc, int x, int y, LPCSTR s, int cnt);
 BOOL           GetTextExtentPoint32A(HDC dc, LPCSTR s, int cnt, SIZE *sz);
 BOOL           GetTextMetricsA(HDC dc, TEXTMETRICS *tm);
@@ -66,6 +65,7 @@ int            GetDeviceCaps(HDC dc, int index);
 
 /* ---- kernel32 ---- */
 DWORD          GetTickCount(void);
+DWORD          GetProcessId(HANDLE proc);
 HLOCAL         LocalAlloc(UINT flags, DWORD bytes);
 BOOL           FreeLibrary(HMODULE mod);
 HRSRC          FindResourceA(HMODULE mod, LPCSTR name, LPCSTR type);

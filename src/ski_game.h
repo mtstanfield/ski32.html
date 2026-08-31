@@ -52,7 +52,8 @@ extern int32_t  g_c680, g_c684; /* 0x40c680/84 world extent left/top (WM_SIZE) *
 extern int32_t  g_c688, g_c68c; /* 0x40c688/8c world extent right/bottom */
 extern uint16_t g_c690, g_c6e8; /* 0x40c690/e8 canvas w/h (aligned+0x40) */
 extern uint32_t g_c694; /* 0x40c694 window active (WM_ACTIVATE wParam) */
-extern HBRUSH   g_c69c; /* 0x40c69c NULL_BRUSH (GetStockObject(0)) */
+extern HBRUSH   g_c69c; /* 0x40c69c GetStockObject(0); stock 0 out of range
+                         * -> NULL under real GDI (FillRect no-ops) */
 extern uint32_t g_c698; /* 0x40c698 last tick time ms / RNG seed source */
 extern HINSTANCE g_c61c; /* 0x40c61c hInstance */
 extern RECT     g_c6b0; /* 0x40c6b0 main client rect {l,t,r,b} */

@@ -726,7 +726,9 @@ static void status_paint(HWND h)
 {
     PAINTSTRUCT ps;
     BeginPaint(h, &ps);
-    HBRUSH hbr = (HBRUSH)GetStockObject(4); /* DKGRAY_BRUSH */
+    HBRUSH hbr = (HBRUSH)GetStockObject(4); /* stock 4: out of the valid
+                                             * range (5..14) -> NULL under
+                                             * real GDI; FrameRect no-ops */
     FrameRect(ps.hdc, &g_c778, hbr);
     short cursor[2] = { 2, 0 }; /* x, y */
     const UINT ids[4] = { STR_TIME, STR_DIST, STR_SPEED, STR_STYLE };
@@ -772,7 +774,8 @@ static int ski_create_windows(HINSTANCE hInstance, HINSTANCE hPrev, int show)
     ReleaseDC(NULL, hdc);
 
     g_c61c = hInstance;
-    g_c69c = (HBRUSH)GetStockObject(0); /* NULL_BRUSH */
+    g_c69c = (HBRUSH)GetStockObject(0); /* stock 0: out of range -> NULL
+                                         * under real GDI; FillRect no-ops */
     g_c6c8 = NULL;
     g_c624 = NULL;
     g_c6d0 = 0;

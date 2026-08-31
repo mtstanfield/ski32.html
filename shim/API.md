@@ -85,12 +85,12 @@ KERNEL32 48, USER32 33, GDI32 14, WINMM 1.
 | `LoadIconA` | non-NULL dummy; class icon "iconSki" (ski_win.c:813) |
 | `LoadCursorA` | non-NULL dummy; IDC_ARROW (0x7f00) for both classes (ski_win.c:814, 821) |
 | `OpenIcon` | identity restore (single-instance guard, ski_win.c:789) |
-| `MessageBoxA` | **modal**, return IDOK=1/IDNO=2; three call sites: assert box 0x31 MB_ICONHAND\|MB_YESNO (IDNO → DestroyWindow main, ski_core.c:141), fatal box 0x30 MB_ICONERROR\|MB_OK (ski_core.c:158), high-score modal type 0, owner = main window (ski_core.c:2812) |
+| `MessageBoxA` | **modal**, return 1 (Yes/OK) or 2 (No — the original compares == 2, which is Win32 IDCANCEL; the IDNO macro is never used by the game); three call sites: assert box 0x31 MB_ICONHAND\|MB_YESNO (No → DestroyWindow main, ski_core.c:141), fatal box 0x30 MB_ICONERROR\|MB_OK (ski_core.c:158), high-score modal type 0, owner = main window (ski_core.c:2812) |
 | `LoadStringA` | id → exact UI string from the .data table (ids 1..17, skidef.h; NOTES "String table"); copy ≤ max−1 chars, return length |
 | `LoadBitmapA` | id → the pre-decoded sprite `HBITMAP` (ids 1..0x59; see Sprite model) |
 | `wsprintfA` | `vsnprintf` — all formats used are snprintf-compatible (`%2u %2.2u %5.2d %7ld %s`) |
-| `FillRect` | fill rect with the brush color (status panel background) |
-| `FrameRect` | 1-px 3D edge with the brush (status panel frame, DKGRAY_BRUSH, ski_win.c:729–730) |
+| `FillRect` | fill rect with the brush color; the single call (ski_win.c:570, main paint) uses g_c69c = GetStockObject(0) = NULL → no-op in the reference; a NULL brush must always no-op |
+| `FrameRect` | 1-px 3D edge with the brush; the single call (ski_win.c:729-730) uses GetStockObject(4) = NULL → no-op in the reference (no status-panel frame); a NULL brush must always no-op |
 
 ## gdi32 — surfaces/text (14)
 
@@ -105,7 +105,7 @@ KERNEL32 48, USER32 33, GDI32 14, WINMM 1.
 | `GetObjectA` | fill the 24-byte `BITMAP` prefix (bmType..bmBitsPixel — width/height/planes/bitcount); called with cnt=0x18 (sprite-load sizing pass) |
 | `BitBlt` | copy src rect → dst rect with ROP; the exact ROP set in use is below — must reproduce Win32 GDI's palette/index → color and 32bpp/1bpp conversion semantics |
 | `PatBlt` | ROP fill; **only** BLACKNESS 0xFF0062 is used (canvas clears, ski_core.c:2892/2974/3001) |
-| `GetStockObject` | index → brush handle; only 0 = NULL_BRUSH (ski_win.c:775), 4 = DKGRAY_BRUSH (ski_win.c:729), 10 = WHITE_BRUSH (ski_win.c:686) |
+| `GetStockObject` | the indices used are 0, 4, 10 (ski_win.c:775/729/686, transcribed verbatim from the original — FUN_004052d0.c:36, FUN_00406970.c:17, FUN_00406a70.c:21). 0 and 4 are outside the valid stock range (5..14), so real GDI returns NULL for them: the FillRect (ski_win.c:570) and FrameRect (730) that use those brushes NO-OP — the M2 reference has no status-panel frame. 10 = BLACK_BRUSH (solid black); it is SelectObject'd into the status DC (686-688) and never drawn with — return a solid-black handle |
 | `GetTextExtentPoint32A` | width = sum of per-char advances, height = font tmHeight (pixel-exact font capture, Task 19) |
 | `GetTextMetricsA` | fill TEXTMETRICS from the captured metrics |
 | `GetDeviceCaps` | screen-DC caps (hdc from `GetDC(NULL)`): index 8 = HORZRES → c6a0, index 10 = VERTRES → c74c (ski_win.c:770–771); the reference run used a 1024×768 screen (harness Xvfb) → window outer 768×768, client 760×734 (evidence/m0-geometry.txt) — the shim's "screen" must match for parity |
@@ -115,16 +115,18 @@ KERNEL32 48, USER32 33, GDI32 14, WINMM 1.
 
 | ROP | value | call sites |
 |---|---|---|
-| SRCCOPY | 0xCC0020 | ski_core.c:331 (sprite→image strip), 2977 (group canvas), 2565 (harness tick dump) |
+| SRCCOPY | 0xCC0020 | ski_core.c:331 (sprite→image strip), 2977 (group canvas, first draw), 2997 (group canvas→window composite), 2565 (harness tick dump) |
 | MASKPEN | 0x330008 | ski_core.c:332 (sprite→1bpp mask strip) |
-| SRCAND | 0x8800C6 | ski_core.c:2901, 2982 (group canvas) |
+| SRCAND | 0x8800C6 | ski_core.c:2901 (group canvas OOM fallback), 2982 (group canvas) |
+| SRCOR | 0xEE0086 | ski_core.c:2980 (group canvas mask blit) |
 | BLACKNESS | 0xFF0062 | PatBlt only (above) |
 
-Note: the inline comments at ski_core.c:2901/2977/2982 misname these ROPs
-("SRCCOPY" over 0x8800C6, "SRCPAINT" over 0xCC0020). The **values** are
-transcribed from the decompilation and are authoritative; the comments are
-wrong (out of scope for this task — flagged for a follow-up). No CAPTUREBLT,
-PATINVERT, or WHITENESS call exists in the rebuild.
+The inline comments at ski_core.c:2901/2977/2980/2982/2997 misnamed these
+ROPs ("SRCCOPY" over 0x8800C6, "SRCPAINT" over 0xCC0020, "MERGECOPY" over
+0xEE0086); they are corrected to the true names. The **values** are
+transcribed from the decompilation (decompile/ghidra/FUN_00401540.c:77,171,
+175,177,187) and are authoritative. No CAPTUREBLT, PATINVERT, or WHITENESS
+call exists in the rebuild.
 
 ## kernel32 (12)
 
