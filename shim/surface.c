@@ -137,7 +137,6 @@ static int rop_bit(uint32_t rop, int d, int s)
     case 0x00EE0086u: return d | s;
     case 0x00FF0062u: return 1; /* WHITENESS */
     case 0x000042u:   return 0; /* BLACKNESS */
-    case 0x0000FFu:   return 1;
     default:          return d;
     }
 }
@@ -363,7 +362,7 @@ BOOL BitBlt(HDC dst, int x, int y, int w, int h, HDC src, int sx, int sy, DWORD 
 BOOL PatBlt(HDC dc, int x, int y, int w, int h, DWORD rop)
 {
     uint32_t fill;
-    if (rop == 0x00FF0062u || rop == 0x0000FFu)
+    if (rop == 0x00FF0062u)
         fill = 0xFFFFFFu; /* WHITENESS */
     else if (rop == 0x000042u)
         fill = 0u;        /* BLACKNESS */
