@@ -329,7 +329,7 @@ int ski_load_bitmaps(HDC hdc)
                 e->yoff = (uint16_t)yoff;
                 HGDIOBJ old = SelectObject(g_c5ec, s);
                 BitBlt(e->img_dc, 0, yoff, w, h, g_c5ec, 0, 0, 0xcc0020 /*SRCCOPY*/);
-                BitBlt(e->mask_dc, 0, yoff, w, h, g_c5ec, 0, 0, 0x330008 /*MASKPEN*/);
+                BitBlt(e->mask_dc, 0, yoff, w, h, g_c5ec, 0, 0, 0x330008 /* NOTSRCCOPY */);
                 SelectObject(g_c5ec, old);
                 DeleteObject(s);
             }
@@ -2852,7 +2852,7 @@ static uint32_t ski_offscreen_resize(uint16_t w, uint16_t h)
 
 /* 0x401540 — draw one merged group: repeatedly pick the bottom-most
  * drawable entity (off = y - (flags & 0x40 ? col height : 0)), blit it
- * onto the canvas (mask SRCOR + image SRCAND, or image SRCCOPY on
+ * onto the canvas (mask SRCPAINT + image SRCAND, or image SRCCOPY on
  * the first draw after a canvas clear), flag it and unlink it; flag-2
  * nodes are unlinked inline (flag 1 cleared -> canvas needs clearing).
  * The canvas is then composited back to the window at the group bbox. */
@@ -2884,12 +2884,12 @@ static void draw_entity(HDC hdc, ski_ent_t *e)
     }
 
     if (ski_offscreen_resize(cw, ch) == 0) {
-        /* OOM fallback: black out the group area in the window and blit
+        /* OOM fallback: white out the group area (WHITENESS) and blit
          * every standalone sprite directly (no mask pass).
          * TODO(T12-verify): raw bytes load this PatBlt's HDC from an
          * unwritten local slot, not the param_1 register; the decompiled
          * C (authority) passes param_1. */
-        PatBlt(hdc, x1, y1, cw, ch, 0xff0062 /* BLACKNESS */);
+        PatBlt(hdc, x1, y1, cw, ch, 0xff0062 /* WHITENESS */);
         for (q = e; ; q = q->gnext) {
             uint32_t f = q->flags;
             if ((f & 1) == 0) {
@@ -2972,12 +2972,12 @@ static void draw_entity(HDC hdc, ski_ent_t *e)
                 if (dx > 0 || dy > 0 || colw < (int32_t)(short)cw ||
                     colh < (int32_t)(short)ch)
                     PatBlt(g_c5ec, 0, 0, (int)(short)cw, (int)(short)ch,
-                           0xff0062 /* BLACKNESS */);
+                           0xff0062 /* WHITENESS */);
                 BitBlt(g_c5ec, dx, dy, colw, colh, c->img_dc, 0, yoff,
                        0xcc0020 /* SRCCOPY */);
             } else {
                 BitBlt(g_c5ec, dx, dy, colw, colh, c->mask_dc, 0, yoff,
-                       0xee0086 /* SRCOR */);
+                       0xee0086 /* SRCPAINT */);
                 BitBlt(g_c5ec, dx, dy, colw, colh, c->img_dc, 0, yoff,
                        0x8800c6 /* SRCAND */);
             }
@@ -2999,7 +2999,7 @@ static void draw_entity(HDC hdc, ski_ent_t *e)
     }
     if (cleared != 0) {
         PatBlt(hdc, (int)(short)x1, (int)(short)y1,
-               (int)(short)cw, (int)(short)ch, 0xff0062 /* BLACKNESS */);
+               (int)(short)cw, (int)(short)ch, 0xff0062 /* WHITENESS */);
     }
 }
 

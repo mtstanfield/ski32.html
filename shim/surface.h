@@ -14,7 +14,7 @@
  *   0x00CC0020 SRCCOPY    D' = S
  *   0x00330008 NOTSRCCOPY D' = ~S        (the game's "MASKPEN" blit)
  *   0x008800C6 SRCAND     D' = S & D
- *   0x00EE0086 SRCPAINT   D' = S | D     (the game's "SRCOR" blit)
+ *   0x00EE0086 SRCPAINT   D' = S | D
  *   0x00FF0062 WHITENESS  D' = 1         (PatBlt canvas/window clears)
  * The decompiled comments mislabeled 0xFF0062 "BLACKNESS"; in the real
  * ROP table 0x000042 is BLACKNESS and 0xFF0062 is WHITENESS (mingw SDK

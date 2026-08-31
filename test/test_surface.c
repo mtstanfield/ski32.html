@@ -26,7 +26,7 @@ static int failures = 0;
 #define ROP_SRCCOPY    0xCC0020u
 #define ROP_NOTSRCCOPY 0x330008u /* game "MASKPEN" */
 #define ROP_SRCAND     0x8800C6u
-#define ROP_SRCOR      0xEE0086u /* game "SRCOR" */
+#define ROP_SRCPAINT   0xEE0086u
 #define ROP_WHITENESS  0xFF0062u
 #define ROP_BLACKNESS  0x000042u /* real GDI BLACKNESS; defensive */
 
@@ -107,7 +107,7 @@ static void test_mask_strip_generation(void)
     DeleteDC(dc);
 }
 
-/* SRCPAINT (game "SRCOR"), 1bpp -> 32bpp: the canvas mask pass.
+/* SRCPAINT, 1bpp -> 32bpp: the canvas mask pass.
  * Bit 1 expands to white (paints), bit 0 to black (no-op). */
 static void test_srcor_from_1bpp(void)
 {
@@ -126,7 +126,7 @@ static void test_srcor_from_1bpp(void)
 
     def = SelectObject(dc, mask);
     CHECK(def != NULL);
-    CHECK(BitBlt(dc, 0, 0, 2, 2, src, 0, 0, ROP_SRCOR));
+    CHECK(BitBlt(dc, 0, 0, 2, 2, src, 0, 0, ROP_SRCPAINT));
     CHECK(shim_bmp_px(mask, 0, 0) == WHITE); /* red | white */
     CHECK(shim_bmp_px(mask, 1, 0) == 0);     /* black | black */
     CHECK(shim_bmp_px(mask, 0, 1) == 0);

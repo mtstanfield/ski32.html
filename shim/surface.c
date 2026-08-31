@@ -121,10 +121,9 @@ static uint32_t rop32(uint32_t rop, uint32_t d, uint32_t s)
     case 0x00CC0020u: return s;             /* SRCCOPY */
     case 0x00330008u: return s ^ 0xFFFFFFu; /* NOTSRCCOPY: D' = ~S */
     case 0x008800C6u: return s & d;         /* SRCAND */
-    case 0x00EE0086u: return s | d;         /* SRCPAINT (game "SRCOR") */
+    case 0x00EE0086u: return s | d;         /* SRCPAINT */
     case 0x00FF0062u: return 0xFFFFFFu;     /* WHITENESS */
-    case 0x000042u:   return 0u;            /* BLACKNESS (real value) */
-    case 0x0000FFu:   return 0xFFFFFFu;     /* types.h WHITENESS macro value */
+    case 0x000042u:   return 0u;            /* BLACKNESS (real value, unused by the game) */
     default:          return d;
     }
 }

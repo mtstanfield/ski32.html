@@ -104,7 +104,7 @@ KERNEL32 48, USER32 33, GDI32 14, WINMM 1.
 | `DeleteObject` | free bitmap |
 | `GetObjectA` | fill the 24-byte `BITMAP` prefix (bmType..bmBitsPixel — width/height/planes/bitcount); called with cnt=0x18 (sprite-load sizing pass) |
 | `BitBlt` | copy src rect → dst rect with ROP; the exact ROP set in use is below — must reproduce Win32 GDI's palette/index → color and 32bpp/1bpp conversion semantics |
-| `PatBlt` | ROP fill; **only** BLACKNESS 0xFF0062 is used (canvas clears, ski_core.c:2892/2974/3001) |
+| `PatBlt` | ROP fill; **only** WHITENESS 0xFF0062 is used (canvas/window clears fill white, ski_core.c:2892/2974/3001) |
 | `GetStockObject` | the indices used are 0, 4, 10 (ski_win.c:775/729/686, transcribed verbatim from the original — FUN_004052d0.c:36, FUN_00406970.c:17, FUN_00406a70.c:21). 0 and 4 are outside the valid stock range (5..14), so real GDI returns NULL for them: the FillRect (ski_win.c:570) and FrameRect (730) that use those brushes NO-OP — the M2 reference has no status-panel frame. 10 = BLACK_BRUSH (solid black); it is SelectObject'd into the status DC (686-688) and never drawn with — return a solid-black handle |
 | `GetTextExtentPoint32A` | width = sum of per-char advances, height = font tmHeight (pixel-exact font capture, Task 19) |
 | `GetTextMetricsA` | fill TEXTMETRICS from the captured metrics |
@@ -116,17 +116,19 @@ KERNEL32 48, USER32 33, GDI32 14, WINMM 1.
 | ROP | value | call sites |
 |---|---|---|
 | SRCCOPY | 0xCC0020 | ski_core.c:331 (sprite→image strip), 2977 (group canvas, first draw), 2997 (group canvas→window composite), 2565 (harness tick dump) |
-| MASKPEN | 0x330008 | ski_core.c:332 (sprite→1bpp mask strip) |
+| NOTSRCCOPY (a.k.a. MASKPEN) | 0x330008 | ski_core.c:332 (sprite→1bpp mask strip) |
 | SRCAND | 0x8800C6 | ski_core.c:2901 (group canvas OOM fallback), 2982 (group canvas) |
-| SRCOR | 0xEE0086 | ski_core.c:2980 (group canvas mask blit) |
-| BLACKNESS | 0xFF0062 | PatBlt only (above) |
+| SRCPAINT | 0xEE0086 | ski_core.c:2980 (group canvas mask blit) |
+| WHITENESS | 0xFF0062 | PatBlt only (above) |
 
 The inline comments at ski_core.c:2901/2977/2980/2982/2997 misnamed these
 ROPs ("SRCCOPY" over 0x8800C6, "SRCPAINT" over 0xCC0020, "MERGECOPY" over
-0xEE0086); they are corrected to the true names. The **values** are
-transcribed from the decompilation (decompile/ghidra/FUN_00401540.c:77,171,
-175,177,187) and are authoritative. No CAPTUREBLT, PATINVERT, or WHITENESS
-call exists in the rebuild.
+0xEE0086), and the PatBlt clears at 2892/2975/3002 said "BLACKNESS" —
+0xFF0062 is WHITENESS (the real BLACKNESS is 0x000042, unused by the game):
+the canvas/window clears fill WHITE. All comments now use the SDK names
+(mingw wingdi.h). The **values** are transcribed from the decompilation
+(decompile/ghidra/FUN_00401540.c:77,171,175,177,187) and are
+authoritative. No CAPTUREBLT or PATINVERT call exists in the rebuild.
 
 ## kernel32 (12)
 
@@ -173,9 +175,9 @@ carries bitcount + palette). It then builds two strip families:
   ((max_w & 0xffc0)+0x40) × ((max_h & 0xffc0)+0x40).
 
 Each sprite is blitted into its image strip with SRCCOPY (0xCC0020) and into
-its mask strip with MASKPEN (0x330008). The shim's `BitBlt` must therefore
+its mask strip with NOTSRCCOPY (0x330008, a.k.a. MASKPEN). The shim's `BitBlt` must therefore
 reproduce Win32 GDI's DIB expansion exactly: palette-index → RGB for the
-32bpp image strips, and DIB → 1bpp for the mask strips under MASKPEN.
+32bpp image strips, and DIB → 1bpp for the mask strips under NOTSRCCOPY.
 M2's 0-px frame parity against the original (real GDI on both sides) is the
 acceptance gate for these conversions.
 
