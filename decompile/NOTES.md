@@ -2495,3 +2495,163 @@ the only gameplay consumer and needs a kill). s07 unmasked breakdown:
 s09 ground-truth run (healthy clock, full wake sequence) was captured
 before the first freeze window; its 0px pixel diff used a healthy-clock
 rebuild side as well.
+
+## HANDOFF (2026-08-31) — M2 complete
+
+**M2 exit is GREEN — all 8 scenarios PASS at 0 differing pixels against the
+instrumented original, every original run on a healthy clock.** The rebuild
+is pixel-identical to `original/ski32.exe` under the harness; M3 (WASM) may
+start.
+
+### Verification (2026-08-31, HEAD b175ea5)
+
+Environment, both sides: `SKI_NO_ACTIVATE=1` (tick-locked `ski_in.bin`
+input, no synthetic mouse events), Xvfb :99 768x768x24 (single instance,
+verified alive before each run), instrumented original regenerated per
+session via `python3 harness/stub_patch.py /tmp/orig_t15.exe` with the
+deployed stub verified byte-equal to `harness/stub/orig_stub.bin` (2167 B at
+file offset 0x96ac), rebuild = one fresh `build-native-harness/ski.exe`
+(Release, `-DSKI_HARNESS=ON`, i686-w64-mingw32; **zero warnings**) used for
+all rebuild runs. Diff: `harness/.venv/bin/python harness/diff.py
+<orig-dir> <rebuild-dir>` — tol=0, scene 760x734 minus panel mask
+(620,0)-(760,60), shift=0. Frame counts vary ±a few ticks with
+init/activation; the criterion is 0px over the compared frames.
+
+| scenario         | frames compared | failing | worst | result |
+|------------------|-----------------|---------|-------|--------|
+| s01_menu         | 304             | 0       | 0px   | PASS   |
+| s02_start        | 403             | 0       | 0px   | PASS   |
+| s03_steering     | 807             | 0       | 0px   | PASS   |
+| s04_crouch       | 403             | 0       | 0px   | PASS   |
+| s05_modes        | 807             | 0       | 0px   | PASS   |
+| s06_longrun      | 3005            | 0       | 0px   | PASS   |
+| s07_monster      | 4006            | 0       | 0px   | PASS   |
+| s08_pause_scores | 301             | 0       | 0px   | PASS — documented harness limitation: pause/resume not exercised (tick-driven injection) |
+
+Actual diff.py tails (evidence):
+- s01: `304 frames, 0 failing (tol=0), worst=0px, scene=760x734 mask=(620,0)-(760,60), shift=0 -> PASS`
+- s02: `403 frames, 0 failing (tol=0), worst=0px, scene=760x734 mask=(620,0)-(760,60), shift=0 -> PASS`
+- s03: `807 frames, 0 failing (tol=0), worst=0px, scene=760x734 mask=(620,0)-(760,60), shift=0 -> PASS`
+- s04: `403 frames, 0 failing (tol=0), worst=0px, scene=760x734 mask=(620,0)-(760,60), shift=0 -> PASS`
+- s05: `807 frames, 0 failing (tol=0), worst=0px, scene=760x734 mask=(620,0)-(760,60), shift=0 -> PASS`
+- s06: `3005 frames, 0 failing (tol=0), worst=0px, scene=760x734 mask=(620,0)-(760,60), shift=0 -> PASS`
+- s07: `4006 frames, 0 failing (tol=0), worst=0px, scene=760x734 mask=(620,0)-(760,60), shift=0 -> PASS`
+- s08: `301 frames, 0 failing (tol=0), worst=0px, scene=760x734 mask=(620,0)-(760,60), shift=0 -> PASS`
+
+Healthy-clock confirmation: every ORIGINAL run passed the c698 liveness
+check (3 samples of 0x40c698 via /proc/<pid>/mem, 300 ms apart, MUST
+advance) before being counted — sample deltas ~280-320 counts per 300 ms
+window (e.g. s01: 2104561919 / 2104562239 / 2104562519). No original run
+was frozen; none needed a re-run. Post-run panel spot-check (3 frames from
+the first half of each run, region x>=620 top 60 px): s02-s08 show an
+advancing panel; s01's panel region is static title-screen art (there is no
+status panel on the menu screen) — scene animation across s01 frames was
+verified directly, so this is not a frozen clock. (The c698 read on
+REBUILD-side runs is meaningless — 0x40c698 is an address in the
+instrumented original's layout, not the rebuild's — and the liveness
+requirement applies to original runs only.)
+
+### The three fixed bugs (each a 1:1 transcription, each through two-stage review)
+1. **T16 — original-side stub key injection (ee679f8).** The stub's
+   `.bit` loop loaded the 16-bit key word into eax and the
+   `call wproc_main` clobbered it, so only the lowest set bit of each
+   word was ever delivered (multi-key words like s05's 7-key word were
+   effectively ignored). Fix: save the word in esi around the loop
+   (`mov esi, eax` after the load; `test esi,ecx` in the loop) — bin grew
+   2166 -> 2167 B. Same commit: rebuild key-table fixes verified 1:1
+   against the original's tables (VK 0x69 Numpad9 -> frame-6 case; DOWN
+   crouch cycle order). Review follow-up: comment reflow NIT (2d28e57).
+2. **s06_longrun — ski_collide case 3 (14817af).** The snowboarder
+   tumble/crash test (0x403eb4, dispatch cl=1/cl=2) compared `e1->y`
+   against the partner top instead of `e1->mode` (original: `cmp %bp,%bx`
+   at 0x403f15/0x403ed0, bx=a->mode, bp=b->colptr->h+b->mode). Introduced
+   by a wrong Ghidra header comment. Fix: two comparisons y -> mode;
+   header replaced with the real dispatch state. Review follow-up:
+   Ghidra mis-render trap named in the function header (785317f).
+3. **Yeti wake anim — ski_gate_cruise airborne hold (a6cff1c).** While
+   airborne (z != 0) the original jumps to the shared tail 0x4046b8 and
+   stores d->frame back UNCHANGED (0x404390 `jne 0x4046b8`); the
+   walking-pose toggle (0x4046a7) is reached only from the grounded
+   path. Ghidra hoisted the toggle beside the shared tail and the rebuild
+   applied it on every airborne tick, clobbering the wake machine after
+   any airborne-tick kill (and corrupting every sleep-bob arc). Fix:
+   `if (d->z != 0) { return; }` after the z/fdelta update. Same commit:
+   `ski_set_frame` strict-aliasing memcpy (removed the last build warning)
+   and the `SKI_DBG_YETI` harness state probe.
+
+### Known non-blocking items
+- **s08 pause/resume harness limitation.** The t=300 F3 pause stops the
+  game's tick clock on BOTH sides; injection is tick-driven (word N is
+  consumed at tick N+1), so the t=500 resume word is never delivered to a
+  paused game. Both sides stall identically at ~301 frames (ticks
+  300/1200) and diff 0px over the captured frames — everything up to the
+  pause is pixel-identical. Pause/resume itself is not exercised by the
+  suite; treat this as a documented limitation, not a divergence.
+- **Wine GetTickCount freeze hazard + mitigation.** Transient windows were
+  observed (2026-08-31) where the in-process GetTickCount — and with it
+  the stub's c698 tick counter — froze while the game still ticked
+  (wineserver's cached time feed; GetTickCount makes zero time syscalls
+  per call). A frozen-clock original run starves only the status panel's
+  redraw gate (0x40104d), producing panel-only unmasked diffs.
+  Mitigation = the healthy-clock protocol, applied to every original run
+  in the table above: (1) pre-run `pkill` stale games + `wineserver -k`
+  (WINEPREFIX=$HOME/.wine-ski) + kill any "Program Error"/"Wine Debugger"
+  modal windows; (2) 3 samples of 0x40c698 via /proc/<pid>/mem ~300 ms
+  apart MUST advance, else kill + `wineserver -k` + ~10 s wait + re-run
+  the scenario; (3) post-run panel spot-check of 3 first-half frames
+  (x>=620, top 60 px) — a frozen panel while the scene moves means
+  re-run. No run in this suite needed a re-run.
+- **Untracked session tooling (intentionally not committed).**
+  `harness/strprobe/{capprobe,gdtest,gwrtest}.c` (T15 color-capture GDI
+  probes), `tools/find_child.py` (win32 child PID finder), `tools/iat_snap.py`
+  (IAT inspection), and a stray `ski_in.bin` at the repo root. The
+  committed repo builds and runs without any of them.
+- **Rebuild-side c698 reads are not a liveness signal** (see verification
+  note): do not treat a "FROZEN" c698 read on a rebuild run as a clock
+  problem.
+
+### M3 (WASM) start
+Exact next tasks, verbatim from
+`docs/superpowers/plans/2026-08-24-skifree-decompile-wasm.md`
+("M3 — WASM port (Tasks 16–21)", plan lines 1101-1739 — read that section
+in full before starting; it contains all steps, code, and commit
+messages):
+- Task 16: Authoritative shim API list (linker probe)
+- Task 17: Shim core — types, surfaces, blits (+ host unit tests)
+- Task 18: Shim windows + message pump + timers
+- Task 19: Pixel-exact font (capture from the original's own rendering)
+- Task 20: Shim misc — sprites, INI, audio, strings, remaining GDI
+- Task 21: WASM-vs-rebuild frame diff (M3 exit)
+
+M3 exit criterion (plan, verbatim): "all 8 scenarios PASS (WASM vs
+rebuild). By transitivity (M2 already proved rebuild == original), the
+WASM port is pixel-identical to the original." Then M4 — Ship (Tasks
+22–24: browser app, full verification matrix + README, final cleanup).
+
+### Operational contract
+- **Xvfb:** :99 MUST be the 768x768x24 instance (the original sizes its
+  window from the screen; a dead/wrong-size Xvfb makes the game exit at
+  frame 0). Verify `pgrep -a Xvfb` before any run; restart at 768x768 if
+  dead. Never run a second X server on :99.
+- **Original regen:** `rm -f /tmp/orig_t15.exe && python3
+  harness/stub_patch.py /tmp/orig_t15.exe`, then verify deployed bytes ==
+  `harness/stub/orig_stub.bin` (2167 B at file offset 0x96ac).
+- **Rebuild recipe:** `rm -rf build-native-harness && mkdir
+  build-native-harness && cd build-native-harness && cmake
+  -DCMAKE_BUILD_TYPE=Release -DSKI_HARNESS=ON
+  -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc
+  -DCMAKE_RC_COMPILER=i686-w64-mingw32-windres .. && make -j8 ski` — must
+  be ZERO warnings (the tree is 100% warning-free at HEAD).
+- **Run one scenario:** `SKI_NO_ACTIVATE=1 bash harness/run_scenario.sh
+  <scen> <BIN> <OUT_DIR>` (BIN absolute; frames + ski_in.bin land in
+  OUT_DIR; one wine game at a time; SKI_NO_ACTIVATE=1 required for
+  tick-locked input — without it the descent-start tick jitters ±1 and
+  diffs are meaningless).
+- **Diff:** `harness/.venv/bin/python harness/diff.py <orig-dir>
+  <rebuild-dir>` (tol=0; panel mask (620,0)-(760,60) built in; compares
+  the frame overlap when counts differ by ±a few ticks).
+- **Disk policy:** s06 is ~4.8 G per side (~1.35 G per 800-tick run).
+  Check `df -h /` before each run (keep >= ~6 G free) and delete both of
+  a pair's frame dirs immediately after its diff — verify each dir holds
+  only `frame_*_main.ppm` + `ski_in.bin` before `rm -rf`.
+- **Shell prefix:** prefix all commands with `rtk` (repo convention).
