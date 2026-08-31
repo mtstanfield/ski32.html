@@ -89,8 +89,8 @@ KERNEL32 48, USER32 33, GDI32 14, WINMM 1.
 | `LoadStringA` | id → exact UI string from the .data table (ids 1..17, skidef.h; NOTES "String table"); copy ≤ max−1 chars, return length |
 | `LoadBitmapA` | id → the pre-decoded sprite `HBITMAP` (ids 1..0x59; see Sprite model) |
 | `wsprintfA` | `vsnprintf` — all formats used are snprintf-compatible (`%2u %2.2u %5.2d %7ld %s`) |
-| `FillRect` | fill rect with the brush color; the single call (ski_win.c:570, main paint) uses g_c69c = GetStockObject(0) = NULL → no-op in the reference; a NULL brush must always no-op |
-| `FrameRect` | 1-px 3D edge with the brush; the single call (ski_win.c:729-730) uses GetStockObject(4) = NULL → no-op in the reference (no status-panel frame); a NULL brush must always no-op |
+| `FillRect` | fill rect with the brush color; the single call (ski_win.c:570, main paint) uses g_c69c = GetStockObject(0) = the wine WHITE brush (stock 0 is non-NULL under the reference's wine 9.0) → fills the main client white; a NULL brush must always no-op |
+| `FrameRect` | 1-px edge with the brush; the single call (ski_win.c:729-730) uses GetStockObject(4) = the wine BLACK brush → draws the 1-px black ring around the 123×52 status panel that IS visible in the reference (evidence/m0-original-gameplay.png); a NULL brush must always no-op |
 
 ## gdi32 — surfaces/text (14)
 
@@ -105,7 +105,7 @@ KERNEL32 48, USER32 33, GDI32 14, WINMM 1.
 | `GetObjectA` | fill the 24-byte `BITMAP` prefix (bmType..bmBitsPixel — width/height/planes/bitcount); called with cnt=0x18 (sprite-load sizing pass) |
 | `BitBlt` | copy src rect → dst rect with ROP; the exact ROP set in use is below — must reproduce Win32 GDI's palette/index → color and 32bpp/1bpp conversion semantics |
 | `PatBlt` | ROP fill; **only** WHITENESS 0xFF0062 is used (canvas/window clears fill white, ski_core.c:2892/2974/3001) |
-| `GetStockObject` | the indices used are 0, 4, 10 (ski_win.c:775/729/686, transcribed verbatim from the original — FUN_004052d0.c:36, FUN_00406970.c:17, FUN_00406a70.c:21). 0 and 4 are outside the valid stock range (5..14), so real GDI returns NULL for them: the FillRect (ski_win.c:570) and FrameRect (730) that use those brushes NO-OP — the M2 reference has no status-panel frame. 10 = BLACK_BRUSH (solid black); it is SelectObject'd into the status DC (686-688) and never drawn with — return a solid-black handle |
+| `GetStockObject` | the indices used are 0, 4, 10 (ski_win.c:775/729/686, transcribed verbatim from the original — FUN_004052d0.c:36, FUN_00406970.c:17, FUN_00406a70.c:21). The reference runs under wine 9.0 (WINEPREFIX=~/.wine-ski), whose stock table is NOT real Win32's (real: 0/4 NULL, 10 NULL_PEN). Measured wine behavior: 0 → WHITE brush (the class hbrBackground — windows erase white), 4 → BLACK brush (the FrameRect at ski_win.c:730 draws the 1-px black status-panel ring visible in the M2 reference), 10 → a 12px MONOSPACE TTF (empty face name, lfHeight 12, weight 400, tmHeight 12, tmAscent 9, tmDescent 3, every ASCII advance 7, tmMaxCharWidth 13) — the game's text font. wproc_status_create SelectObject's it into the status DC (686-688), making it the DC's current font for every TextOutA/extent/metrics call, so return the Task-19 captured-font handle for 10 (glyphs + advances baked in shim/font.inc; see shim/text.c) and white/black brush handles for 0/4 |
 | `GetTextExtentPoint32A` | width = sum of per-char advances, height = font tmHeight (pixel-exact font capture, Task 19) |
 | `GetTextMetricsA` | fill TEXTMETRICS from the captured metrics |
 | `GetDeviceCaps` | screen-DC caps (hdc from `GetDC(NULL)`): index 8 = HORZRES → c6a0, index 10 = VERTRES → c74c (ski_win.c:770–771); the reference run used a 1024×768 screen (harness Xvfb) → window outer 768×768, client 760×734 (evidence/m0-geometry.txt) — the shim's "screen" must match for parity |
