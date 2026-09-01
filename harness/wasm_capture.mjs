@@ -61,6 +61,15 @@ const DBG_PORT = 9333;
 const UDD = `/tmp/ski-wasm-${sc}-${process.pid}`;
 rmSync(UDD, { recursive: true, force: true });
 
+// A stale headless Chrome on the debug port would silently poison this run
+// (CDP attaches to the wrong browser — seen once: a previous run's tree
+// survived chrome.kill). Fail loudly rather than pkill by guesswork.
+try {
+  await (await fetch(`http://127.0.0.1:${DBG_PORT}/json`)).json();
+  console.error(`debug port ${DBG_PORT} is already in use — kill the stale headless Chrome (pkill -f remote-debugging-port=${DBG_PORT}) and re-run`);
+  process.exit(2);
+} catch {}
+
 const http = spawn("python3", ["-m", "http.server", HTTP_PORT], {
   cwd: path.join(root, "web"), stdio: "ignore",
 });
@@ -70,9 +79,13 @@ const chrome = spawn("/usr/bin/google-chrome", [
   "--disable-backgrounding-occluded-windows",
   "--window-size=1024,768", `--remote-debugging-port=${DBG_PORT}`,
   `--user-data-dir=${UDD}`, "about:blank",
-], { stdio: "ignore" });
+], { stdio: "ignore", detached: true });
 const cleanup = (code) => {
-  try { chrome.kill("SIGKILL"); } catch {}
+  // detached: true => chrome leads its own process group; killing -pid
+  // reaps the headless tree (zygote/GPU/renderer) that chrome.kill()
+  // alone would leave alive on the debug port.
+  try { process.kill(-chrome.pid, "SIGKILL"); }
+  catch { try { chrome.kill("SIGKILL"); } catch {} }
   try { http.kill("SIGKILL"); } catch {}
   process.exit(code);
 };
@@ -225,9 +238,12 @@ while (true) {
 }
 
 // ---- verify + report ------------------------------------------------------
-const expect = Math.min(pulled, lastTick + 1); // seals == ticks completed
-if (pulled !== expect) {
-  console.error(`frame count ${pulled} != tick count ${lastTick + 1}`);
+// Invariant: exactly one seal per completed tick (frame N seals at the top
+// of the (N+1)th ski_tick call, src/ski_core.c ski_harness_step), so at
+// break time pulled === lastTick. (The earlier Math.min(pulled,
+// lastTick+1) comparison was a tautology — pulled <= lastTick+1 always.)
+if (pulled !== lastTick) {
+  console.error(`frame count ${pulled} != tick count ${lastTick}`);
   cleanup(2);
 }
 console.log(JSON.stringify({

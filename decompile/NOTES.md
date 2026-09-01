@@ -2672,3 +2672,161 @@ WASM port is pixel-identical to the original." Then M4 — Ship (Tasks
   a pair's frame dirs immediately after its diff — verify each dir holds
   only `frame_*_main.ppm` + `ski_in.bin` before `rm -rf`.
 - **Shell prefix:** prefix all commands with `rtk` (repo convention).
+
+## HANDOFF (2026-09-01) — M3 complete
+
+**M3 exit is GREEN — all 8 scenarios PASS at 0 differing pixels, WASM vs
+the wine rebuild (tol=0, panel mask, shift 0), on top of a 401/401
+byte-identical determinism gate.** By transitivity with M2 (rebuild ==
+instrumented original, 0px, healthy clocks), the WASM port is
+pixel-identical to `original/ski32.exe`. M4 (Ship, T22-T24) may start.
+
+### Verification (2026-09-01, HEAD 060d44f)
+
+WASM side: `emcmake cmake -B build-wasmdiff -DSKI_DETERMINISTIC=ON
+-DSKI_HARNESS=ON` (0 warnings), driven by `harness/wasm_capture.mjs`
+(headless Chrome + CDP; `?nopump=1` so the u16-LE input stream is
+installed BEFORE the first tick — the SKI_HARNESS input reader caches its
+ready-state at tick 1; frames are pulled per poll from the shim's frame
+seal, PNG-encoded off the tick path). Rebuild side: fresh
+`build-native-harness/ski.exe` (i686, HARNESS=ON, 0 warnings) via
+`harness/run_scenario.sh` under Xvfb :99. Diff: `harness/diff.py`
+(tol=0, mask 620,0,760,60, shift 0; PNG port with DIB-BGR normalization —
+see lesson 7).
+
+Determinism gate: s02_start captured twice (fresh `--user-data-dir`):
+401/401 frames sha256-identical (`evidence/t21-determinism-gate.txt`);
+the spec review's two independent runs reproduced ALL 401 committed
+hashes — the final-code build is bit-reproducible. Spec review re-ran
+s01/s02/s08 end-to-end (0px, shift 0; the s08 F3-pause stall reproduced
+at 300/1200 on BOTH sides, modal poll silent); s03-s07 evidence-checked
+(committed PASS lines + on-disk frame sets with exact counts).
+
+| scenario         | frames compared | result (evidence/t21-wasm-diff.txt) |
+|------------------|-----------------|--------------------------------------|
+| s01_menu         | 301             | 0 failing, worst 0px, shift 0 -> PASS |
+| s02_start        | 401             | 0 failing, worst 0px, shift 0 -> PASS |
+| s03_steering     | 801             | 0 failing, worst 0px, shift 0 -> PASS |
+| s04_crouch       | 401             | 0 failing, worst 0px, shift 0 -> PASS |
+| s05_modes        | 801             | 0 failing, worst 0px, shift 0 -> PASS |
+| s06_longrun      | 3001            | 0 failing, worst 0px, shift 0 -> PASS |
+| s07_monster      | 4001            | 0 failing, worst 0px, shift 0 -> PASS |
+| s08_pause_scores | 301             | 0 failing, worst 0px, shift 0 -> PASS |
+
+### The task chain (T16-T21, each spec-reviewed; BLOCKs fixed + re-verified)
+
+- **T16** (eb58059/1979a68) shim API list: 62 symbols from the emcc probe
+  (60 core + 2 harness-only), PE IAT cross-checked (96 imports).
+- **T17** (8b88377) surface engine: 32/1bpp, full ROP set, live-object
+  registry; the 32→1 NOTSRCCOPY polarity (bit iff px != white) PROVEN by
+  fresh wine probes, not deferred.
+- **T18** (e0bec0f + BLOCK fix 1ab0c03) windows/pump/timers: virtual tick
+  clock (GetTickCount = pure function of tick history). BLOCK: the game's
+  40 ms Win32 *callback* timer proc was dropped (`(void)fn`) and the
+  game never ticked — the pump now invokes the TIMERPROC directly.
+- **T19** (34f2ebc + follow-up 8a98221) pixel-exact font: captured from
+  the original's own wine rendering (harness/fontcap). Stock 10 under
+  wine = a 12px MONOSPACE TTF (the status DC's font — a wine quirk, not a
+  brush); subpixel-AA fringe strips (pen-1..pen+7) + per-channel
+  dst=dst*cap/255 blend; panel 100.0000%. Review exposed a pre-existing
+  label y-origin bug (Ghidra rendered the prologue's `movl $0x2` as
+  short[2] {2,0}; x=2 is pushed per call, the DWORD is the y slot) —
+  invisible to M2 because the diff masks the panel.
+- **T20** (359d9ca + BLOCK fixes 53e88b2) shim completion: 4bpp sprites
+  (wine converts 4bpp resource DIBs to 32bpp first; mask rule = bit iff
+  palette-EXPANDED color != white, wine-probed), INI over localStorage
+  (wine trim semantics probed; wine's line-add space-eating off-by-one
+  documented as deliberate non-reproduction), strings, wsprintfA,
+  MessageBoxA. BLOCKs: INI broken 3 ways (section match, newline
+  dropping, EM_JS string marshaling); modal pump-suspend design vs wine,
+  which KEEPS the main window ticking AND painting during a modal
+  (controlled probe: ticks at full 40ms cadence + WM_PAINTs while box
+  up).
+- **T21** (060d44f) frame-seal capture + 8-scenario campaign: GREEN.
+  Closeout NITs (mjs count invariant, Chrome process-group reap,
+  stale-port fail-loud, evidence-append note) in the closing commit.
+
+### M3 lessons (contract-level, for M4+)
+
+1. **When wine and real Win32 diverge, WINE is the contract** (the
+   reference ran under wine 9.0): the GetStockObject table (0/8 white,
+   1 0xc0c0c0, 2-7 black, 10 = 12px mono FONT), the status panel's 1px
+   black ring (FrameRect + stock-4, real — 246 px = 2*123+2*50), the
+   4bpp→1 mask rule. Real-Win32 answers were wrong twice (T16 note
+   "0/4 → NULL, no panel frame", "stock 10 = BLACK_BRUSH").
+2. **Wine GDI subpixel-AA**: glyphs bleed 1px LEFT of the pen; GDI
+   composites left-to-right with per-channel dst = dst*cap/255. The 8px
+   pen-origin crop lost the fringe (22px panel diff); 21px isolated
+   capture slots + 9px strips fix it (font.json/font.inc, T19).
+3. **emcc 6.0.6 EM_JS does NOT marshal strings**: a JS string returned to
+   `const char*` arrives NULL; a `const char*` arg arrives in JS as a raw
+   pointer number. The C-buffer pattern (stringToUTF8/UTF8ToString + int
+   length) is mandatory — INI, ski_window_png, frame pulls, modal text
+   hooks all use it. `lengthBytesUTF8` is NOT in EM_JS scope.
+4. **The pump starts from JS**: `emscripten_set_main_loop(…,
+   simulate_infinite_loop=1)` inside main() unwinds the C stack
+   (abandoned boot — status window/game start never ran).
+   `ski_start_pump()` from boot.js after createSki() resolves.
+5. **Modal MessageBoxA does NOT suspend the main window** (wine 9.0):
+   the callback timer keeps firing at 40ms cadence and WM_PAINT is
+   delivered while the box is up; on close, ticks continue seamlessly.
+   Shim design: record-and-return-IDOK at raise, pump never stops, the
+   dialog owns input (key/mouse dropped while pending),
+   ski_messagebox_answer(r) replays only DestroyWindow-if-r==2.
+   emscripten_sleep/ASYNCIFY were empirically eliminated (blocks rAF /
+   clobbers the suspended C stack).
+6. **Frame seals, not live captures**: JS can only observe BETWEEN ticks;
+   the rebuild captures frame k INSIDE ski_tick (word k-1 consumed, word
+   k not injected, tick-k physics not run). The shim seals at that exact
+   point (ski_shim_frame_seal, 4-deep ring, PNG encode on pull only) —
+   a live-DC capture at tick_get()==k is a different state and NO
+   constant shift repairs it.
+7. **BGR**: the harness PPMs (rebuild + T14 original dumps) write the DIB
+   raster verbatim (B,G,R byte order). diff.py load_ppm normalizes PPM to
+   true RGB (proven against evidence/m0-original-menu.png: swap matches,
+   raw off by 16x). M2 PPM-vs-PPM results are invariant (the swap is a
+   bijective channel reversal).
+8. **Virtual clock + tick-synchronous capture**: GetTickCount advances
+   exactly one period per timer fire; capture polls
+   _ski_tick_get/_ski_frame_get and seals are a pure function of tick
+   history — the byte-identical re-run gate is the proof (and the M3
+   exit's foundation: deterministic WASM vs tick-locked wine).
+9. **Operational**: frame sets are huge (rebuild side 15 GB across the 8
+   scenarios) — the T21 campaign hit 100% disk once (Xvfb :99 died, two
+   wine runs failed, both re-ran clean; rebuild dirs were deleted after
+   diffing). A stale headless Chrome on the fixed CDP port 9333 silently
+   poisons the next capture — the mjs now fails loud on an in-use port
+   and reaps the Chrome process group (detached spawn, kill -pid).
+
+### Known non-blocking items
+
+- **s08 F3-pause stall** (unchanged from M2): both sides stop at
+  301/1200 frames; pause/resume is not exercised (tick-driven
+  injection). The virtual GetTickCount keeps advancing per fire under
+  pause, but the game dt is tick-derived (SKI_DETERMINISTIC) and all
+  compared frames are pre-pause — unobservable.
+- **Assert-site modal epilogue**: the game's post-box
+  ski_pause_toggle runs at RAISE time (MessageBoxA cannot block in the
+  shim) rather than at answer time — the one divergent path; no scenario
+  can reach an assert raise (M2 ran all 8 at 0px, no box ever rendered).
+- **Panel mask retained** (620,0)-(760,60): the wine PPM shows the stale
+  parent backing store in the child-panel region while the WASM seal
+  composites the real panel; panel text fidelity is established
+  separately (T19: 100.0000% vs original frames).
+- **Pre-existing**: ski_dbg_state_dump (T13 scaffolding) still runs in
+  the WASM harness build (in-memory FS, pure function of tick history —
+  harmless, left as-is).
+- **Untracked session tooling**: unchanged (the same 6 files from the
+  M2 handoff).
+
+### M4 (Ship) entry points
+
+- web/index.html + web/boot.js are minimal scaffolding (T22 polishes:
+  browser app). Shipping build = `build-web` (HARNESS=OFF); web/ is
+  verified seal-free and byte-identical to a fresh shipping build; boots
+  with auto-pump at the 40 ms period, _ski_window_png returns a 760x734
+  dataURL.
+- T22-T24 per the plan ("M4 — Ship (Tasks 22–24): browser app, full
+  verification matrix + README, final cleanup"). The T21 suite
+  (`harness/run_scenario_wasm.sh`, one line per scenario once rebuild
+  frames exist) is the reusable verification matrix backbone.

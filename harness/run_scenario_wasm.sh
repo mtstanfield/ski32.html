@@ -11,6 +11,9 @@
 # src/ski_core.c ski_harness_frame), so the comparison is shift 0.
 # s08: both sides stall at the F3 pause (~301 frames); diff.py compares
 # the overlap, which is the whole of the rebuild side.
+# NOTE: diff --report APPENDS one line per run to
+# evidence/t21-wasm-diff.txt — the committed 8-line file is one full suite
+# run; rm it (or use --viz-only scratch runs) before re-running the suite.
 # Usage: bash harness/run_scenario_wasm.sh SCENARIO
 set -u
 cd "$(dirname "$0")/.."
