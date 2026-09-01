@@ -25,10 +25,22 @@
  * is wine 9.0's dibdrv, which the M2 reference ran on (0-px frame parity
  * against the original). Its effective semantics: the mono DC pair has
  * background = white, text = black, so
- *   - 32bpp -> 1bpp (NOTSRCCOPY): a bit is set iff the source pixel is
+ *   - color -> 1bpp (NOTSRCCOPY): a bit is set iff the source pixel is
  *     NOT SHIM_MONO_ON (the blit inverts the "is background color" bit),
  *   - 1bpp -> 32bpp (SRCPAINT et al.): bit 1 expands to SHIM_MONO_ON,
  *     bit 0 expands to SHIM_MONO_OFF.
+ * The color->1bpp rule was measured for 32bpp sources in T17
+ * (probe_mono.c Q1: [white,red,black,blue] -> bits 0 1 1 1). The sprite
+ * sources are 4bpp indexed DIBs in the PE; T20 probed the 4bpp case
+ * directly (real RT_BITMAP 4bpp DIBs + LoadBitmapA + NOTSRCCOPY, wine
+ * 9.0, /tmp/t20probe; discriminators and results in the
+ * harness/embed_sprites.py header): the bit is set iff the
+ * PALETTE-EXPANDED color is not white — the index is never compared
+ * (a second white palette entry also maps to 0; index-0 and
+ * index-of-white rules are both rejected). Wine also converts the
+ * loaded 4bpp DIB to a 32bpp device bitmap (GetObjectA reports 32), so
+ * the shim stores sprites pre-expanded (shim_bmp_from_rgb) and the
+ * single color->1bpp rule above implements both cases exactly.
  * SHIM_MONO_ON is the single polarity knob: if the T21 WASM-vs-rebuild
  * diff shows the masks inverted, flip it there (SHIM_MONO_OFF derives
  * from it, so both directions flip together).
@@ -61,5 +73,15 @@ int        shim_bmp_bpp(HBITMAP b); /* 1 or 32 */
 int        shim_bmp_stride(HBITMAP b); /* bytes per row, GDI padding */
 uint32_t   shim_bmp_px(HBITMAP b, int x, int y); /* COLORREF; 1bpp: ON/OFF */
 void       shim_bmp_set_px(HBITMAP b, int x, int y, uint32_t c); /* 1bpp: c==ON sets the bit */
+
+/* New 32bpp bitmap from palette-expanded RGB rows (the embedded sprites,
+ * misc.c LoadBitmapA). The sprite resources are 4bpp indexed DIBs in the
+ * PE, but the reference's wine 9.0 converts a loaded resource DIB to a
+ * 32bpp device bitmap (T20 probe: GetObjectA reports bpp=32 after
+ * LoadBitmapA of a 4bpp RT_BITMAP), so the shim stores them pre-expanded;
+ * the NOTSRCCOPY 4bpp->1bpp mask pass is then exactly the 32bpp->1bpp
+ * "not white" rule above (T17 + T20 probe evidence in the embed script
+ * header, harness/embed_sprites.py). */
+HBITMAP    shim_bmp_from_rgb(int w, int h, const uint8_t *rgb);
 
 #endif /* SHIM_SURFACE_H */

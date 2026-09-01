@@ -304,6 +304,23 @@ HBITMAP CreateBitmap(int w, int h, int planes, int bpp, const void *bits)
     return b;
 }
 
+/* New 32bpp bitmap from palette-expanded RGB rows (the embedded sprites,
+ * misc.c LoadBitmapA; see surface.h for the wine 4bpp->32bpp conversion
+ * evidence). Alpha is 0xFF like every other 32bpp surface. */
+HBITMAP shim_bmp_from_rgb(int w, int h, const uint8_t *rgb)
+{
+    HBITMAP b = bmp_alloc(w, h, 32);
+    if (!b)
+        return NULL;
+    ShimBmp *s = (ShimBmp *)b;
+    for (int i = 0; i < w * h; i++) {
+        s->px[4 * i] = rgb[3 * i];
+        s->px[4 * i + 1] = rgb[3 * i + 1];
+        s->px[4 * i + 2] = rgb[3 * i + 2];
+    }
+    return b;
+}
+
 HGDIOBJ SelectObject(HDC dc, HGDIOBJ obj)
 {
     ShimDC *d = (ShimDC *)dc;

@@ -59,7 +59,7 @@ KERNEL32 48, USER32 33, GDI32 14, WINMM 1.
 | symbol | what it must do |
 |---|---|
 | `RegisterClassA` | store class by name → WndProc + bg brush; both `SkiMain` (style 0x2023) and `SkiStatus` register (ski_win.c:807–826); called only when hPrev==NULL; return nonzero atom |
-| `CreateWindowExA` | create a window record (client dc w×h) + start the main loop once the main window exists; main: style 0x2cf0000, w = min(HORZRES,VERTRES), h = VERTRES, x = (HORZRES−w)/2 (ski_win.c:834); status: WS_CHILD 0x4000000, 0×0 (ski_win.c:838) |
+| `CreateWindowExA` | create a window record (client dc w×h); main: style 0x2cf0000, w = min(HORZRES,VERTRES), h = VERTRES, x = (HORZRES−w)/2 (ski_win.c:834); status: WS_CHILD 0x4000000, 0×0 (ski_win.c:838). The rAF main loop is NOT started here — see `ski_start_pump` (Debug hooks): `emscripten_set_main_loop(..., simulate_infinite_loop=1)` inside main() throws 'unwind' and abandons the rest of boot (T20) |
 | `FindWindowA` | look up a window by class name; the single-instance guard probes "SkiMain" (ski_win.c:785) — return NULL on the web (fresh boot) |
 | `MoveWindow` | update x/y/w/h; the WM_SIZE handler resizes the offscreen canvas |
 | `SetWindowPos` | MoveWindow semantics per flag bits; only used with 0x3 = SWP_NOSIZE\|SWP_NOMOVE (ski_win.c:787) |
@@ -77,7 +77,7 @@ KERNEL32 48, USER32 33, GDI32 14, WINMM 1.
 | `GetClientRect` | {0,0,w,h} |
 | `DefWindowProcA` | no-op, return 0 (fall-through for undriven messages) |
 | `PostQuitMessage` | set the quit flag (loop exit) |
-| `GetMessageA` | pop one queued message (timers/keys/clicks) into the MSG; 0 on empty+quit |
+| `GetMessageA` | always returns 0 (WM_QUIT): WinMain's loop exits immediately and the rAF pump (`ski_mainloop`, started by `ski_start_pump`) does ALL dispatching — timers, paints, injected input (T18 design, boot-verified T20) |
 | `TranslateMessage` | no-op |
 | `DispatchMessageA` | call the window's WndProc(msg, wp, lp) |
 | `DestroyWindow` | mark window dead (WM_DESTROY path; also triggered by IDNO on the assert box, ski_core.c:143) |
@@ -85,10 +85,10 @@ KERNEL32 48, USER32 33, GDI32 14, WINMM 1.
 | `LoadIconA` | non-NULL dummy; class icon "iconSki" (ski_win.c:813) |
 | `LoadCursorA` | non-NULL dummy; IDC_ARROW (0x7f00) for both classes (ski_win.c:814, 821) |
 | `OpenIcon` | identity restore (single-instance guard, ski_win.c:789) |
-| `MessageBoxA` | **modal**, return 1 (Yes/OK) or 2 (No — the original compares == 2, which is Win32 IDCANCEL; the IDNO macro is never used by the game); three call sites: assert box 0x31 MB_ICONHAND\|MB_YESNO (No → DestroyWindow main, ski_core.c:141), fatal box 0x30 MB_ICONERROR\|MB_OK (ski_core.c:158), high-score modal type 0, owner = main window (ski_core.c:2812) |
-| `LoadStringA` | id → exact UI string from the .data table (ids 1..17, skidef.h; NOTES "String table"); copy ≤ max−1 chars, return length |
+| `MessageBoxA` | **Deterministic modal in the pump** (T20). Three call sites: assert box 0x31 MB_ICONHAND\|MB_YESNO (the only site that reads the return: `if (r == 2) DestroyWindow(g_c6c8)` — ski_core.c:141-143; 2 is the IDCANCEL literal the original compares, the IDNO macro is never used), fatal box 0x30 MB_ICONERROR\|MB_OK (ski_core.c:158, return ignored), high-score modal type 0, owner = main window (ski_core.c:2812, return ignored). Design: the pump is single-threaded (rAF) so the box cannot block in C. When the game raises a box, `shim_modal_raise` (win.c) records the box (type/text/caption/site) + logs it to the console, then longjmps to `ski_mainloop`'s setjmp (armed once per rAF frame; the buffer is only targeted while live — a `g_in_pump` guard). The pump then SUSPENDS the game — no ticks, no messages, no paint — exactly matching the M2 s08 evidence (original and rebuild both 0px while a box is up). The harness answers via `ski_messagebox_answer(r)` (1 = IDOK, 2 = IDCANCEL); on the next pump frame the site epilogue runs (assert: `if (r == 2) DestroyWindow(g_c6c8); ski_pause_toggle()` — fatal/score: none) and the game resumes. The one-frame deferral of the epilogue (vs synchronous Win32) is invisible: the box blocks every tick and the epilogue touches only window/pause state. A box raised outside the pump (boot-time paths, before the rAF loop starts) falls through and returns IDOK synchronously — the callers' epilogues are then plain returns. JS visibility: `ski_messagebox_get/type/text/caption` (win.c KEEPALIVE hooks) |
+| `LoadStringA` | id → exact UI string from the .data table (ids 1..17, skidef.h; NOTES "String table"); copy ≤ max−1 chars, return length. The table is **1-based with a dummy "" at [0]** (id 1 = "SkiFree", id 3 = "Time:" — matches the M1-extracted resources.json group 1 and the T19 pixel-verified reference); id 0 and out-of-range fail (return 0). The group-2 strings (" <-- that's you!" / " <-- try again!") are NOT reachable via LoadStringA — the game reads them through ski_str_cache from its own .data table (skidef.h STR_SUFFIX_*), and the FindResourceA path is WAVE-only (below) |
 | `LoadBitmapA` | id → the pre-decoded sprite `HBITMAP` (ids 1..0x59; see Sprite model) |
-| `wsprintfA` | `vsnprintf` — all formats used are snprintf-compatible (`%2u %2.2u %5.2d %7ld %s`) |
+| `wsprintfA` | `vsnprintf` — every format used in src/ is snprintf-compatible (`%s line %u`, `%5.2dm`, `%5.2dm/s`, `%7ld`, `%9ld`, `%2u:%2.2u:%2.2u.%2.2u`, `frame_%06u_main.ppm`, `P6\n%d %d\n255\n` — traced T20; no format needs native handling) |
 | `FillRect` | fill rect with the brush color; the single call (ski_win.c:570, main paint) uses g_c69c = GetStockObject(0) = the wine WHITE brush (stock 0 is non-NULL under the reference's wine 9.0) → fills the main client white; a NULL brush must always no-op |
 | `FrameRect` | 1-px edge with the brush; the single call (ski_win.c:729-730) uses GetStockObject(4) = the wine BLACK brush → draws the 1-px black ring around the 123×52 status panel that IS visible in the reference (evidence/m0-original-gameplay.png); a NULL brush must always no-op |
 
@@ -141,8 +141,8 @@ authoritative. No CAPTUREBLT or PATINVERT call exists in the rebuild.
 | `LoadResource` | reachable only if `FindResourceA` returns non-NULL → unreachable; stub that returns its input (ski_core.c:177) |
 | `LockResource` | unreachable for the same reason (ski_core.c:179) |
 | `FreeResource` | unreachable (ski_sound_free path, ski_core.c:192); no-op |
-| `GetPrivateProfileStringA` | INI read: "entpack.ini", section "Ski", 10-entry high-score panels, 0x100 buffer (ski_core.c:2744); localStorage-backed, classic INI semantics, case-insensitive |
-| `WritePrivateProfileStringA` | INI write, same file/section (ski_core.c:2789); persist to localStorage on every call |
+| `GetPrivateProfileStringA` | INI read: "entpack.ini", section "Ski", 10-entry high-score panels ("SS"/"FS"/"GS"), 0x100 buffer (ski_core.c:2744). Backed by localStorage key **"entpack.ini"** via an EM_JS bridge (misc.c); the C side caches the full text (loaded once from the shim's main before WinMain). Classic INI semantics: `[section]` lines, `key=value`, case-insensitive sections+keys, `lpDefault` returned when missing, values stored/read verbatim (the reader tokenizes on 0x20 + atoi, so no trimming) |
+| `WritePrivateProfileStringA` | INI write, same file/section (ski_core.c:2789): single-pass cache rebuild (replaces existing key, appends at end if new, deletes on NULL value, creates `[section]` if absent) and persists to localStorage on every call |
 | `lstrlenA` | strlen |
 | `lstrcpyA` | strcpy |
 | `lstrcmpiA` | case-insensitive strcmp; the WinMain "nosound" gate (ski_win.c:858) |
@@ -181,12 +181,44 @@ reproduce Win32 GDI's DIB expansion exactly: palette-index → RGB for the
 M2's 0-px frame parity against the original (real GDI on both sides) is the
 acceptance gate for these conversions.
 
-## Debug hooks (Task 18/21, NOT in the symbol list)
+### 4bpp sprite storage + the 4→1 mask rule (T20)
+
+The PE's 89 sprite resources are all 4bpp indexed DIBs (resources.json:
+bpp=4 ×89, no 1/8/24bpp present). The T20 wine-9.0 probe
+(/tmp/t20probe, real 4bpp RT_BITMAP resources via `gen_dibs.py` + LoadBitmapA,
+2026-09-01) established:
+
+- **wine converts loaded 4bpp resource DIBs to 32bpp device bitmaps**:
+  `GetObjectA` on the loaded resource reports bpp=32 (and a 4bpp GetDIBits
+  readback fails with error 87). So storing the sprites pre-expanded as
+  32bpp RGBA (`shim_bmp_from_rgb`, surface.c; rows from the T6-extracted
+  PNGs, whose palette-corrected RGB *is* the resource pixels) is exactly
+  what the reference GDI had. `harness/embed_sprites.py` emits
+  `shim/sprites.inc` (89 entries: id, w, h, RGB rows) and `LoadBitmapA`
+  builds a 32bpp ShimBmp from it.
+- **The NOTSRCCOPY 4bpp→1bpp mask rule: bit set iff the palette-EXPANDED
+  color is not 0xFFFFFF** — the same rule as the measured 32→1 case (T17:
+  [white,red,black,blue] → bits 0 1 1 1). Discriminated by palette shapes:
+  pal [red,white,green,black] px idx [0,1,2,3] → bits **1 0 1 1** (rejects
+  index-based rules) and pal [white,white,red,black] → bits **0 0 1 1**
+  (rejects index-of-white). The index is never compared; the expanded RGB
+  is. surface.c's 32→1 NOTSRCCOPY (px != WHITE) applies unchanged to the
+  expanded sprite pixels, so the game's mask-strip pass (ski_core.c:332)
+  needs no 4bpp-specific code.
+
+## Debug hooks (Task 18/20/21, NOT in the symbol list)
 
 `EMSCRIPTEN_KEEPALIVE`: `ski_key_event(vk, down)`, `ski_click(x, y)`,
 `ski_set_input(bytes, n)` (per-tick input word, same 2-byte layout as
 `harness/gen_input.py`), `ski_tick_get()`, `ski_window_png(n)` (PNG
-dataURL of window n's framebuffer), `window.__ski = createSki()` boot.
+dataURL of window n's framebuffer), `ski_start_pump()` (start the rAF
+pump — web/boot.js calls it once after createSki() resolves; it MUST NOT
+be called from inside the C main stack, see CreateWindowExA row), and the
+MessageBoxA modal hooks `ski_messagebox_get()`, `ski_messagebox_type()`,
+`ski_messagebox_text()`, `ski_messagebox_caption()`,
+`ski_messagebox_answer(r)` (1 = IDOK, 2 = IDCANCEL). Boot surface:
+`window.__ski = createSki()` (MODULARIZE, EXPORT_NAME=createSki); the
+module resolves after main() (WinMain) returns.
 
 ## Build notes
 
@@ -197,7 +229,16 @@ dataURL of window n's framebuffer), `window.__ski = createSki()` boot.
 - `#include <windows.h>` resolves to `shim/windows.h` via `-I shim`
   (the game sources are unmodified).
 - `-sENVIRONMENT=web -sMODULARIZE=1 -sEXPORT_NAME=createSki`
-  (already in CMakeLists).
+  (already in CMakeLists), plus `-sEXPORT_KEEPALIVE=1` and
+  `-sEXPORTED_RUNTIME_METHODS=HEAPU8` (canvas.c's blit/png EM_JS reads
+  `Module.HEAPU8` — without the export the first paint aborts with
+  "HEAPU8 was not exported", T20).
+- Boot: web/index.html (canvas 1024×768) + web/boot.js
+  (`createSki().then(m => { window.__ski = m; m._ski_start_pump(); })`).
+  Verified T20 in headless Chrome: module loads with no console errors
+  (the sole log is the faithful `PlaySoundA((stop), 0x0)` from
+  ski_cleanup), `ski_tick_get()` advances (40 ms game timer), and the
+  title screen (s01) renders at the reference (132,30) geometry.
 - **Harness build prerequisites (verified by the 2026-08-31 harness probe;
   currently missing from the shim, so the probe supplied them from
   the command line):**

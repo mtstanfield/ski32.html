@@ -10,5 +10,8 @@ build-wasm/
 build-native-harness/
 build-test/
 build-web/
+web/ski.js
+web/ski.wasm
+web/ski.js.map
 harness/strprobe/*.exe
 original/ski32_fixed*.exe

@@ -326,6 +326,65 @@ static void test_fill_1bpp(void)
     DeleteDC(dc);
 }
 
+/* shim_bmp_from_rgb (Task 20): the sprite path. The PE's 4bpp sprite
+ * DIBs are stored palette-expanded (wine converts them to 32bpp on load —
+ * see surface.h / harness/embed_sprites.py header), and the NOTSRCCOPY
+ * mask pass on the expanded pixels must give the wine 4bpp->1bpp rule:
+ * bit set iff the expanded color is not white (T20 probe). */
+static void test_sprite_from_rgb(void)
+{
+    /* 2x2: red, white / green, black — the T20 Q2 palette shape. */
+    static const uint8_t rgb[12] = {
+        0xFF, 0x00, 0x00,  0xFF, 0xFF, 0xFF,
+        0x00, 0xFF, 0x00,  0x00, 0x00, 0x00,
+    };
+    HBITMAP b = shim_bmp_from_rgb(2, 2, rgb);
+    HBITMAP m;
+    HBITMAP t;
+    HDC dc, src, tgt;
+    HGDIOBJ def, def3;
+    CHECK(b);
+    CHECK(shim_bmp_w(b) == 2 && shim_bmp_h(b) == 2 && shim_bmp_bpp(b) == 32);
+    CHECK(shim_bmp_px(b, 0, 0) == RED);
+    CHECK(shim_bmp_px(b, 1, 0) == WHITE);
+    CHECK(shim_bmp_px(b, 0, 1) == GREEN);
+    CHECK(shim_bmp_px(b, 1, 1) == 0);
+
+    m = CreateBitmap(2, 2, 1, 1, NULL);
+    t = CreateBitmap(2, 2, 1, 32, NULL); /* image-strip target */
+    dc = CreateCompatibleDC(NULL);
+    tgt = CreateCompatibleDC(NULL);
+    src = shim_dc_new(2, 2);
+    CHECK(m && t && dc && tgt && src);
+    def = SelectObject(dc, m);
+    def3 = SelectObject(tgt, t);
+    (void)SelectObject(src, b); /* first select into a fresh shim DC:
+                                   the previous object may legitimately
+                                   be NULL — only the swap matters */
+    CHECK(def != NULL && def3 != NULL);
+    /* mask-strip pass (ski_core.c:332): NOTSRCCOPY sprite -> 1bpp. */
+    CHECK(BitBlt(dc, 0, 0, 2, 2, src, 0, 0, ROP_NOTSRCCOPY));
+    CHECK(shim_bmp_px(m, 0, 0) == SHIM_MONO_ON);  /* red    -> 1 */
+    CHECK(shim_bmp_px(m, 1, 0) == SHIM_MONO_OFF); /* white  -> 0 */
+    CHECK(shim_bmp_px(m, 0, 1) == SHIM_MONO_ON);  /* green  -> 1 */
+    CHECK(shim_bmp_px(m, 1, 1) == SHIM_MONO_ON);  /* black  -> 1 */
+    /* image-strip pass (ski_core.c:331): SRCCOPY sprite -> 32bpp keeps
+       the palette-expanded RGB. */
+    CHECK(BitBlt(tgt, 0, 0, 2, 2, src, 0, 0, ROP_SRCCOPY));
+    CHECK(shim_bmp_px(t, 0, 0) == RED);
+    CHECK(shim_bmp_px(t, 1, 0) == WHITE);
+    CHECK(shim_bmp_px(t, 0, 1) == GREEN);
+    CHECK(shim_bmp_px(t, 1, 1) == 0);
+    SelectObject(tgt, def3);
+    SelectObject(dc, def);
+    DeleteObject(m);
+    DeleteObject(t);
+    DeleteObject(b);
+    DeleteDC(dc);
+    DeleteDC(tgt);
+    shim_dc_free(src);
+}
+
 int main(void)
 {
     test_plan_cases();
@@ -339,6 +398,7 @@ int main(void)
     test_get_object();
     test_create_bitmap();
     test_fill_1bpp();
+    test_sprite_from_rgb();
     if (failures == 0)
         printf("surface tests PASS\n");
     else

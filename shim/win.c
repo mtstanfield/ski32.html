@@ -14,8 +14,11 @@
  *  - MoveWindow dispatches WM_SIZE / WM_MOVE synchronously on geometry
  *    change and marks the window dirty (status_reposition path).
  *  - InvalidateRect marks dirty (the game always passes NULL rc -> full
- *    client); there is no WM_ERASEBKGND because both classes carry
- *    hbrBackground = GetStockObject(0) = NULL (no GDI erase).
+ *    client); there is no WM_ERASEBKGND pass: painting is
+ *    dirty-driven. (The decompiled class records carry
+ *    hbrBackground = GetStockObject(0), which under the reference's
+ *    wine 9.0 is the WHITE brush — erase-white, matching the
+ *    white-initial surface below; T19 review, 66993e1.)
  *  - Timers: the rAF main loop's scheduler posts the game's 40 ms callback
  *    timer (id 0x29a) at a fixed real-time cadence with catch-up after
  *    throttling. The virtual clock (GetTickCount) advances by exactly the
@@ -45,6 +48,8 @@
  * capture.
  */
 #include <emscripten.h>
+#include <setjmp.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "win.h"
@@ -76,6 +81,104 @@ static ShimWin *g_hmain;      /* the SkiMain window (timer target) */
 static HDC      g_screen_dc;  /* GetDC(NULL) */
 static int      g_loop_started;
 static int      g_quit;
+
+/* ---- MessageBoxA modal state (Task 20) ----------------------------------
+ * Design (the misc.c MessageBoxA note + API.md "MessageBoxA" row hold the
+ * call-site trace and return-value rationale): the pump is single-
+ * threaded, so the box cannot block in C. shim_modal_raise records the
+ * box + its call site and, while the pump is live (g_in_pump), longjmps
+ * to the setjmp at the top of ski_mainloop; the pump then suspends the
+ * game — no timers, no messages, no paint (M2 s08: original and rebuild
+ * both 0px while a box is up). ski_messagebox_answer(r) (JS hook) flags
+ * the answer; on the next pump frame the site epilogue runs and the
+ * game resumes:
+ *   assert site (owner NULL, type 0x31 — ski_core.c:141, the only site
+ *     that reads the return value): if (r == 2) DestroyWindow(g_c6c8);
+ *     then ski_pause_toggle() (the ski_assert_fail epilogue,
+ *     ski_core.c:152);
+ *   fatal site (owner NULL, type 0x30 — ski_core.c:158): none — both
+ *     callers' post-box code is `return 0` (ski_core.c:117,
+ *     ski_win.c:506);
+ *   score site (owner main, type 0 — ski_core.c:2812): none — the box is
+ *     the last statement and every caller's post-box code is `return;`
+ *     (ski_core.c:1638/1679/1715).
+ * A box raised OUTSIDE the pump (the boot-time fatal path runs inside
+ * WinMain, before the rAF loop exists) returns IDOK synchronously and
+ * the caller's plain-return epilogues then run unmodified. */
+static jmp_buf g_modal_jmp;
+static int     g_in_pump;      /* dispatching inside ski_mainloop */
+static int     g_modal_active; /* box up (pending or answered) */
+static int     g_modal_answered;
+static int     g_modal_answer;
+static int     g_modal_type;
+static int     g_modal_is_assert;
+static char    g_modal_text[512];
+static char    g_modal_caption[128];
+
+extern HWND g_c6c8;          /* src/ski_game.h:0x40c6c8 main window */
+extern void ski_pause_toggle(void); /* src/ski_win.c:162 (ski_game.h) */
+
+void shim_modal_raise(HWND owner, const char *text, const char *caption,
+                      UINT type)
+{
+    g_modal_is_assert = (owner == NULL && type == 0x31);
+    g_modal_type = (int)type;
+    g_modal_active = 1;
+    g_modal_answered = 0;
+    g_modal_answer = 0;
+    snprintf(g_modal_text, sizeof g_modal_text, "%s", text ? text : "");
+    snprintf(g_modal_caption, sizeof g_modal_caption, "%s",
+             caption ? caption : "");
+    if (g_in_pump)
+        longjmp(g_modal_jmp, 1); /* back to ski_mainloop; never returns */
+}
+
+int shim_modal_pending(void) { return g_modal_active && !g_modal_answered; }
+
+int shim_modal_type(void) { return g_modal_active ? g_modal_type : 0; }
+
+const char *shim_modal_text(void) { return g_modal_active ? g_modal_text : ""; }
+
+const char *shim_modal_caption(void)
+{
+    return g_modal_active ? g_modal_caption : "";
+}
+
+EMSCRIPTEN_KEEPALIVE void ski_messagebox_answer(int r)
+{
+    if (g_modal_active && !g_modal_answered) {
+        g_modal_answer = r;
+        g_modal_answered = 1;
+    } /* the next pump frame runs the epilogue */
+}
+
+EMSCRIPTEN_KEEPALIVE int ski_messagebox_get(void)
+{
+    return shim_modal_pending() ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int ski_messagebox_type(void) { return shim_modal_type(); }
+
+EMSCRIPTEN_KEEPALIVE const char *ski_messagebox_text(void)
+{
+    return shim_modal_text();
+}
+
+EMSCRIPTEN_KEEPALIVE const char *ski_messagebox_caption(void)
+{
+    return shim_modal_caption();
+}
+
+static void modal_epilogue(void)
+{
+    if (g_modal_is_assert) {
+        if (g_modal_answer == 2 /* IDCANCEL literal, ski_core.c:142 */)
+            DestroyWindow(g_c6c8);
+        ski_pause_toggle(); /* ski_assert_fail epilogue (ski_core.c:152) */
+    }
+    g_modal_active = 0;
+    g_modal_answered = 0;
+}
 
 static void ski_mainloop(void);              /* rAF pump + scheduler */
 extern int WinMain(HINSTANCE, HINSTANCE, LPSTR, int); /* src/ski_win.c */
@@ -254,10 +357,13 @@ HWND CreateWindowExA(DWORD ex, LPCSTR cls, LPCSTR title, DWORD style,
         return NULL;
     if (!v->child && !strcmp(v->cls, "SkiMain"))
         g_hmain = v;
-    if (!v->child && !g_loop_started) {
-        g_loop_started = 1;
-        emscripten_set_main_loop(ski_mainloop, 0, 1);
-    }
+    /* The rAF main loop (ski_mainloop) is started by the JS glue via
+     * ski_start_pump() after main() returns. emscripten_set_main_loop
+     * with simulate_infinite_loop=1 throws 'unwind' to hand control to
+     * the event loop by unwinding the C stack — inside main() that
+     * abandons the rest of boot (the status window, ShowWindow and
+     * ski_game_start never ran; T20 boot trace). g_loop_started stays
+     * the single-registration guard. */
     /* WM_NCCREATE + WM_CREATE: synchronous, real-Win32 semantics. The
      * CREATESTRUCT (lParam) is a stand-in with cxWindow/cyWindow; the
      * game's wprocs never read it (the lp+0x18/+0x1c stores belong to a
@@ -441,6 +547,26 @@ UINT SetTimer(HWND h, UINT id, UINT ms, TIMERPROC fn)
 
 DWORD GetTickCount(void) { return g_now_ms; }
 
+/* Start the rAF pump (the shim's message/timer loop). Called exactly
+ * once by the JS glue (web/boot.js) after the module's main() has
+ * returned — see the CreateWindowExA note for why it cannot start from
+ * inside main(). Idempotent.
+ *
+ * simulate_infinite_loop = 0: ski_mainloop is a plain frame callback,
+ * NOT the C infinite loop the flag's 'unwind' handoff is meant for.
+ * With flag 1, set_main_loop throws 'unwind' to unwind the *C* stack
+ * back to the event loop — right inside main(), that abandons the rest
+ * of boot (observed: status window / ShowWindow / ski_game_start never
+ * ran); called from JS it would reject the module promise instead. */
+EMSCRIPTEN_KEEPALIVE
+void ski_start_pump(void)
+{
+    if (!g_loop_started) {
+        g_loop_started = 1;
+        emscripten_set_main_loop(ski_mainloop, 0, 0);
+    }
+}
+
 BOOL BeginPaint(HWND h, PAINTSTRUCT *ps)
 {
     ShimWin *v = h;
@@ -592,10 +718,27 @@ static void ski_mainloop(void)
 {
     MqMsg m;
     int acted = 0;
+    /* 0 = fresh frame; 1 = a MessageBoxA longjmp from inside a dispatch
+     * below (the game call chain is unwound; the modal state is set).
+     * The buffer is re-armed on every rAF and targeted at most once per
+     * arming — no setjmp reuse. */
+    (void)setjmp(g_modal_jmp);
+    g_in_pump = 0; /* a longjmp just landed (or fresh frame): only the
+                     dispatch loop below counts as in-pump */
     if (g_quit) {
         emscripten_cancel_main_loop();
         return;
     }
+    if (g_modal_active) {
+        if (g_modal_answered) {
+            modal_epilogue();
+        } else {
+            return; /* box up: no ticks, no messages, no paint (M2 s08:
+                       0px) — the canvas is frozen exactly as the
+                       reference's wine modal froze the window */
+        }
+    }
+    g_in_pump = 1;
     if (g_timer_armed && g_hmain && !g_hmain->dead) {
         double now = emscripten_get_now();
         while (now >= g_next_real && mq_space()) {
@@ -608,6 +751,7 @@ static void ski_mainloop(void)
         dispatch1(&m);
         acted = 1;
     }
+    g_in_pump = 0;
     if (acted)
         canvas_flush();
 }
@@ -615,8 +759,11 @@ static void ski_mainloop(void)
 /* ---- entry --------------------------------------------------------------- */
 /* emscripten needs main; the game's entry is WinMain. hPrev = NULL so the
  * class registration runs (ski_win.c:807 gates on hPrev == NULL); show =
- * SW_SHOWNORMAL, as the reference launch used. */
+ * SW_SHOWNORMAL, as the reference launch used. The INI cache loads from
+ * localStorage before WinMain (the high-score read happens during the
+ * first game over; boot itself only needs the cache ready). */
 int main(void)
 {
+    shim_ini_load();
     return WinMain((HINSTANCE)1, NULL, (LPSTR)"", 1);
 }
