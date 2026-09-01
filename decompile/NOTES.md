@@ -2751,7 +2751,7 @@ at 300/1200 on BOTH sides, modal poll silent); s03-s07 evidence-checked
 1. **When wine and real Win32 diverge, WINE is the contract** (the
    reference ran under wine 9.0): the GetStockObject table (0/8 white,
    1 0xc0c0c0, 2-7 black, 10 = 12px mono FONT), the status panel's 1px
-   black ring (FrameRect + stock-4, real — 246 px = 2*123+2*50), the
+   black ring (FrameRect + stock-4, real — 346 px = 2*123 + 2*(52-2); the panel client is 123x52, rows/cols 0/51 and 0/122 black in the original frames), the
    4bpp→1 mask rule. Real-Win32 answers were wrong twice (T16 note
    "0/4 → NULL, no panel frame", "stock 10 = BLACK_BRUSH").
 2. **Wine GDI subpixel-AA**: glyphs bleed 1px LEFT of the pen; GDI
@@ -2802,8 +2802,9 @@ at 300/1200 on BOTH sides, modal poll silent); s03-s07 evidence-checked
 
 - **s08 F3-pause stall** (unchanged from M2): both sides stop at
   301/1200 frames; pause/resume is not exercised (tick-driven
-  injection). The virtual GetTickCount keeps advancing per fire under
-  pause, but the game dt is tick-derived (SKI_DETERMINISTIC) and all
+  injection). The virtual GetTickCount is FROZEN under pause (F3 disarms the timer —
+  no fire; wine's wall-clock GetTickCount keeps advancing), but the game dt is
+  tick-derived (SKI_DETERMINISTIC) and all
   compared frames are pre-pause — unobservable.
 - **Assert-site modal epilogue**: the game's post-box
   ski_pause_toggle runs at RAISE time (MessageBoxA cannot block in the
