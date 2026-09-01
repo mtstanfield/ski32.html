@@ -29,6 +29,10 @@
  *                            path, so up events are ignored).
  *   ski_click(x, y)          canvas coords -> WM_LBUTTONDOWN/UP on the
  *                            window whose client contains the point.
+ *   ski_mouse_move(x, y)     canvas coords -> WM_MOUSEMOVE on the topmost
+ *                            window (children included) whose client
+ *                            contains the point — the game's mouse
+ *                            steering (ski_mouse_aim, ski_win.c:431).
  */
 #include <emscripten.h>
 #include <emscripten/em_js.h>
@@ -354,6 +358,36 @@ EMSCRIPTEN_KEEPALIVE void ski_click(unsigned x, unsigned y)
                              ((unsigned)(unsigned short)ly << 16));
         shim_post((HWND)w, WM_LBUTTONDOWN, 1, lp);
         shim_post((HWND)w, WM_LBUTTONUP, 1, lp);
+        return;
+    }
+}
+
+/* Interactive mouse move -> WM_MOUSEMOVE on the window whose client
+ * contains the point (canvas coords are reference-screen space, same
+ * convention as ski_click). The game's WndProc routes it to
+ * ski_mouse_aim (ski_win.c:649-653, client coords in lParam) — that is
+ * the original's mouse steering. Z-order: the status child sits ABOVE
+ * the parent and is created after it, so scan the table backwards and
+ * (unlike ski_click) do NOT skip children — a move over the panel is
+ * eaten by the child proc (default -> DefWindowProc, no-op,
+ * ski_win.c:751-765), exactly as under wine. The game's own g_c67c
+ * gate (input only while active) applies inside ski_mouse_aim's
+ * caller; posting while inactive is a faithful no-op. */
+EMSCRIPTEN_KEEPALIVE void ski_mouse_move(unsigned x, unsigned y)
+{
+    int i;
+    for (i = shim_window_count() - 1; i >= 0; i--) {
+        ShimWin *w = shim_window(i);
+        int lx = (int)x - (w->x + w->cx);
+        int ly = (int)y - (w->y + w->cy);
+        unsigned long lp;
+        if (!w->visible || w->minimized)
+            continue;
+        if (lx < 0 || ly < 0 || lx >= w->cw || ly >= w->ch)
+            continue;
+        lp = (unsigned long)(((unsigned)(unsigned short)lx) |
+                             ((unsigned)(unsigned short)ly << 16));
+        shim_post((HWND)w, WM_MOUSEMOVE, 0, lp);
         return;
     }
 }

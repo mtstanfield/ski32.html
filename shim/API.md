@@ -216,8 +216,11 @@ and buffers use the C-buffer pattern (see the `ski_window_png` row and the
 Build notes' export list).
 
 `EMSCRIPTEN_KEEPALIVE`: `ski_key_event(vk, down)`, `ski_click(x, y)`,
-`ski_set_input(bytes, n)` (per-tick input word, same 2-byte layout as
-`harness/gen_input.py`), `ski_tick_get()`, `ski_window_png(n, buf, cap)`
+`ski_mouse_move(x, y)` (WM_MOUSEMOVE to the topmost window — children
+included — whose client contains the canvas-space point; the game's
+mouse steering, ski_win.c:649), `ski_set_input(bytes, n)` (per-tick
+input word, same 2-byte layout as `harness/gen_input.py`),
+`ski_tick_get()`, `ski_window_png(n, buf, cap)`
 (PNG dataURL of window n's client framebuffer, written as UTF-8 into
 buf — NUL-terminated, at most cap bytes — returning the length in
 bytes, 0 on error; EM_JS cannot marshal the dataURL back as

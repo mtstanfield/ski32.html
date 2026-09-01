@@ -5,7 +5,18 @@
 <title>SkiFree (web)</title>
 <style>
   body { background: #000; margin: 0; }
-  canvas { display: block; margin: 0 auto; }
+  /* 1:1 pixels when the viewport fits 1024px; below that, scale the
+     WHOLE screen down with nearest-neighbour (crisp — the status panel
+     font is 12px and blurs badly under fractional resampling). The
+     boot.js mouse mapping divides by the rect scale, so input stays
+     exact at any CSS size. */
+  canvas {
+    display: block;
+    margin: 0 auto;
+    width: min(100vw, 1024px);
+    height: auto;
+    image-rendering: pixelated;
+  }
 </style>
 </head>
 <body>
