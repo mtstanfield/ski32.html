@@ -4,7 +4,7 @@
  *
  * Every symbol below was traced against its src/ call sites on 2026-09-01
  * (HEAD 8a98221); the citations are in the per-symbol notes. The
- * MessageBoxA modal design (pump-level suspend + answer hook + per-site
+ * MessageBoxA modal design (pump keeps running + answer hook + per-site
  * epilogue) is documented in shim/API.md and in the MessageBoxA note
  * below.
  */
@@ -370,11 +370,35 @@ BOOL PlaySoundA(LPCSTR name, HMODULE mod, DWORD flags)
  *
  * Values are space-separated int lists ("%ld " per entry, 2788; up to
  * 10 entries). The reader (2746-2767) tokenizes on 0x20 and atoi's each
- * token, so the stored value must round-trip byte-exact: NO trimming on
- * read or write (the trailing space is part of the value; a leading
- * space after '=' would be skipped by the reader anyway, so "key =
- * value" serialization is stable: "... v1 v2 " -> "  v1 v2 " -> same
- * tokens -> same bytes next write).
+ * token, so the trailing space is a separator, not data — which is
+ * exactly how wine 9.0 handles it (probed 2026-09-01, /tmp/t21fix):
+ *   GetPrivateProfileStringA: a FOUND value comes back with leading AND
+ *     trailing blanks (space and tab) stripped, interior blanks kept
+ *     (write " 111 " -> get "111"; "222 333 " -> "222 333"). The DEFAULT
+ *     is trimmed at the END only ("  DEFVAL  " -> "  DEFVAL", n=8).
+ *   WritePrivateProfileStringA: the value's LEADING blanks are trimmed
+ *     before writing (" 777 " -> line `SS=777 `), the trailing blank is
+ *     kept in the file; a replace rewrites the line with the ORIGINAL
+ *     key spelling from the file (write key "ss" over an existing "SS"
+ *     line keeps `SS=` in the file); a pure replace never disturbs any
+ *     other line.
+ *
+ * Serialization mirrors the reference exactly: the wine 9.0-written
+ * profile (~/.wine-ski/drive_c/windows/entpack.ini) is
+ *     [Ski]\r\nSS=-88328 \r\n
+ * — `key=value\r\n` (no spaces around '=', value as above) and
+ * `[section]\r\n`. A write rewrites only the target line, preserving
+ * every other line byte-for-byte including its newline; a missing key
+ * is inserted at the end of its section and a missing section is
+ * appended at end of file.
+ *
+ * Known deviation (documented): wine 9.0's file writer has an
+ * off-by-one — when a write ADDS a new line, the trailing space of the
+ * first value line that has one is eaten (probed, /tmp/t21fix
+ * keycase3-5.exe; pure replaces never eat). The game's tokenizer
+ * (2746-2767) splits on 0x20 and skips leading blanks, so the eaten
+ * space is functionally invisible to the game; the shim does not
+ * reproduce the writer bug.
  *
  * g_c788 is the default: a zeroed .data buffer (ski_core.c:75) -> "" —
  * a missing key yields an empty string (empty table). Classic INI
@@ -382,23 +406,39 @@ BOOL PlaySoundA(LPCSTR name, HMODULE mod, DWORD flags)
  * first '='), case-insensitive sections and keys, first occurrence
  * wins, default returned when missing.
  *
- * The file lives in localStorage key "entpack.ini" (the JS bridge below,
- * canvas.c-style EM_JS); the C side caches the full text — loaded once
- * from the shim's main (win.c) before WinMain, re-saved on every Write*.
- * The game has exactly one INI; the fname argument is always
- * "entpack.ini". */
-EM_JS(const char *, ini_js_load, (),
-      { return localStorage.getItem('entpack.ini') || ""; })
+ * The file lives in localStorage key "entpack.ini"; the C side caches
+ * the full text — loaded once from the shim's main (win.c) before
+ * WinMain, re-saved on every Write*. The game has exactly one INI; the
+ * fname argument is always "entpack.ini".
+ *
+ * The JS bridge uses the C-buffer pattern: EM_JS on emcc 6.0.6 does NOT
+ * marshal strings — a JS string returned as 'const char*' arrives as
+ * NULL and a 'const char*' argument arrives in JS as a raw pointer
+ * NUMBER (T20-review repros, /tmp/t20review/emjs/t{,2}.c). Only ints
+ * cross the bridge: C owns the bytes; JS copies via stringToUTF8 /
+ * UTF8ToString. */
+EM_JS(int, ini_js_load, (char *buf, int cap),
+      {
+        const s = localStorage.getItem('entpack.ini') || "";
+        /* UTF-8 byte length without writing: lengthBytesUTF8 is NOT
+         * in EM_JS scope on emcc 6.0.6 (T20-fix web probe) and
+         * stringToUTF8(s, 0, 0) returns 0, not the needed length —
+         * TextEncoder is exact for arbitrary UTF-8. */
+        const len = new TextEncoder().encode(s).length;
+        if (cap > 0)
+          stringToUTF8(s, buf, cap);
+        return len;
+      })
 EM_JS(void, ini_js_save, (const char *text),
-      { localStorage.setItem('entpack.ini', text); })
+      { localStorage.setItem('entpack.ini', text ? UTF8ToString(text) : ""); })
 
 #define INI_CAP 8192
 static char g_ini[INI_CAP];
 
 void shim_ini_load(void)
 {
-    const char *s = ini_js_load();
-    snprintf(g_ini, sizeof g_ini, "%s", s ? s : "");
+    ini_js_load(g_ini, INI_CAP);
+    g_ini[INI_CAP - 1] = '\0';
 }
 
 /* Locate `key` inside [section] in the cached text. Returns a pointer
@@ -421,8 +461,11 @@ static const char *ini_find(const char *section, const char *key, size_t *vlen)
             continue;
         }
         if (line[0] == '[') {
-            size_t slen = strcspn(line, "]");
-            in = ci_eq(line, slen, section);
+            /* line points at the '[': compare the name between the
+             * brackets — comparing "[Ski" against "Ski" can never
+             * match (T20 review). */
+            size_t slen = strcspn(line + 1, "]");
+            in = ci_eq(line + 1, slen, section);
             p = next;
             continue;
         }
@@ -447,21 +490,36 @@ static const char *ini_find(const char *section, const char *key, size_t *vlen)
     return NULL;
 }
 
+static int ini_ws(int c)
+{
+    return c == ' ' || c == '\t';
+}
+
 int GetPrivateProfileStringA(LPCSTR section, LPCSTR key, LPCSTR def,
                              LPSTR buf, int size, LPCSTR fname)
 {
     (void)fname;
     size_t vlen = 0;
     const char *v, *end;
+    int found;
     if (!section || !key || !buf || size <= 0)
         return 0;
     v = ini_find(section, key, &vlen);
+    found = v != NULL;
     if (!v) {
         v = def ? def : "";
         vlen = v ? strlen(v) : 0;
     }
     end = v + vlen;
     while (vlen && end[-1] == '\r')
+        end--;
+    if (found) {
+        /* wine 9.0: a stored value is trimmed at BOTH ends, interior
+         * blanks kept (T20-fix probe, see the INI note above). */
+        while (v < end && ini_ws((unsigned char)*v))
+            v++;
+    }
+    while (v < end && ini_ws((unsigned char)end[-1]))
         end--;
     size_t n = (size_t)(end - v);
     if (n > (size_t)size - 1)
@@ -472,9 +530,13 @@ int GetPrivateProfileStringA(LPCSTR section, LPCSTR key, LPCSTR def,
 }
 
 /* Rebuild the file so `key` in [section] holds `val` (val == NULL
- * deletes the key — the game never passes NULL). The pass preserves
- * every line it does not replace; the value is emitted verbatim after
- * "key = ", so the token bytes survive the round trip. */
+ * deletes the key — the game never passes NULL). Wine-exact
+ * serialization (see the INI note): the rewritten line is
+ * `key=value\r\n`; every other line is preserved byte-for-byte
+ * INCLUDING its newline (the old pass copied up to eol exclusive and
+ * dropped every newline it touched — T20 review). A missing key is
+ * inserted at the end of its section; a missing section is appended at
+ * end of file. */
 int WritePrivateProfileStringA(LPCSTR section, LPCSTR key, LPCSTR val,
                                LPCSTR fname)
 {
@@ -485,11 +547,39 @@ int WritePrivateProfileStringA(LPCSTR section, LPCSTR key, LPCSTR val,
     const char *p = g_ini;
     if (!section || !key)
         return 0;
+    /* wine 9.0 (T20-fix probe): leading blanks in the value are
+     * trimmed before the line is written; a replace rewrites the line
+     * with the ORIGINAL key spelling from the file, not the argument's. */
+    const char *wval = val;
+    while (wval && ini_ws((unsigned char)*wval))
+        wval++;
 #define PUT(s)                                                                     \
     do {                                                                           \
         const char *q = (s);                                                       \
         while (*q && n + 1 < sizeof tmp)                                           \
             tmp[n++] = *q++;                                                       \
+    } while (0)
+    /* copy the line verbatim, newline included (eol == NULL: final
+     * unterminated line — copy to its end) */
+#define PUT_LINE(l, l2)                                                            \
+    do {                                                                           \
+        const char *q = (l);                                                       \
+        const char *stop = (eol) ? (eol) + 1 : (l) + (l2);                         \
+        while (q < stop && n + 1 < sizeof tmp)                                     \
+            tmp[n++] = *q++;                                                       \
+    } while (0)
+    /* the wine line shape: no spaces around '=', CRLF; (k, klen) are
+     * the key bytes to emit — the original file spelling on a replace,
+     * the argument for an insertion */
+#define PUT_KEYLINE(k, klen)                                                       \
+    do {                                                                           \
+        size_t ki;                                                                 \
+        for (ki = 0; ki < (size_t)(klen); ki++)                                    \
+            if (n + 1 < sizeof tmp)                                                \
+                tmp[n++] = (k)[ki];                                                \
+        PUT("=");                                                                  \
+        PUT(wval);                                                                 \
+        PUT("\r\n");                                                               \
     } while (0)
     while (*p) {
         const char *line = p;
@@ -502,36 +592,24 @@ int WritePrivateProfileStringA(LPCSTR section, LPCSTR key, LPCSTR val,
             trim++;
             tlen--;
         }
-        if (tlen == 0) {
-            if (in && !done && val) {
-                PUT(key);
-                PUT(" = ");
-                PUT(val);
-                PUT("\n");
+        if (trim[0] == '[' && tlen > 0) {
+            /* trim points at the '[': compare the name between the
+             * brackets (the old code compared "[Ski" against "Ski" —
+             * T20 review). */
+            size_t slen = strcspn(trim + 1, "]");
+            int is_ours = ci_eq(trim + 1, slen, section);
+            if (in && !done && val && !is_ours) {
+                PUT_KEYLINE(key, (int)strlen(key)); /* end of our section:
+                                  insert before the next header */
                 done = 1;
             }
-            p = next;
-            continue;
-        }
-        if (trim[0] == '[') {
-            size_t slen = strcspn(trim, "]");
-            if (in && !done && val) {
-                PUT(key);
-                PUT(" = ");
-                PUT(val);
-                PUT("\n");
-                done = 1;
-            }
-            in = ci_eq(trim, slen, section);
+            in = is_ours;
             saw |= in;
-            /* preserve the original line verbatim */
-            const char *stop = eol ? eol : line + len;
-            while (stop > line && n + 1 < sizeof tmp)
-                tmp[n++] = *line++;
+            PUT_LINE(line, len);
             p = next;
             continue;
         }
-        if (in && !done) {
+        if (tlen > 0 && in && !done) {
             const char *eq = memchr(trim, '=', tlen);
             if (eq) {
                 size_t klen = (size_t)(eq - trim);
@@ -540,44 +618,69 @@ int WritePrivateProfileStringA(LPCSTR section, LPCSTR key, LPCSTR val,
                 if (ci_eq(trim, klen, key)) {
                     done = 1;
                     if (val) {
-                        PUT(key);
-                        PUT(" = ");
-                        PUT(val);
-                        PUT("\n");
-                    }
-                    /* val == NULL: the line is dropped */
+                        /* the ORIGINAL key spelling from the file —
+                         * wine keeps it on a replace (T20-fix probe) */
+                        PUT_KEYLINE(trim, (int)klen);
+                    } /* val == NULL: the line is dropped */
                     p = next;
                     continue;
                 }
             }
         }
-        /* preserve the original line + newline verbatim */
-        const char *stop = eol ? eol : line + len;
-        while (stop > line && n + 1 < sizeof tmp)
-            tmp[n++] = *line++;
+        PUT_LINE(line, len);
         p = next;
     }
     if (in && !done && val) {
-        PUT(key);
-        PUT(" = ");
-        PUT(val);
-        PUT("\n");
+        PUT_KEYLINE(key, (int)strlen(key)); /* our section is last:
+                                                 append at its end */
     } else if (!saw && val) {
         if (n && tmp[n - 1] != '\n')
-            PUT("\n");
+            PUT("\r\n");
         PUT("[");
         PUT(section);
-        PUT("]\n");
-        PUT(key);
-        PUT(" = ");
-        PUT(val);
-        PUT("\n");
+        PUT("]\r\n");
+        PUT_KEYLINE(key, (int)strlen(key));
     }
     tmp[n] = '\0';
     snprintf(g_ini, sizeof g_ini, "%s", tmp);
     ini_js_save(g_ini);
     return 1;
 }
+
+/* Test hook (T20-review verification): exercise the INI cache + the
+ * localStorage bridge without a full game run — the bridge is EM_JS,
+ * so the host unit test (which stubs it) cannot see the real thing.
+ * Fixed "Ski" section, game-shaped keys/values (ski_core.c:2724-2789);
+ * ints only cross the JS boundary (no string marshaling on emcc 6.0.6):
+ *   0: WritePrivateProfileStringA("Ski","SS","-88328 ","entpack.ini")
+ *   1: WritePrivateProfileStringA("Ski","FS","12 34 ","entpack.ini")
+ *   2: GetPrivateProfileStringA("Ski","SS","",...) into the result
+ *      buffer, returns the length (wine trims the trailing space: 6)
+ *   3: same for "FS" (interior space kept: "12 34", 5)
+ * The result buffer is read back with UTF8ToString(ski_test_ini_result()). */
+static char g_ini_probe[0x100];
+
+EMSCRIPTEN_KEEPALIVE
+int ski_test_ini(int op)
+{
+    switch (op) {
+    case 0:
+        return WritePrivateProfileStringA("Ski", "SS", "-88328 ",
+                                          "entpack.ini");
+    case 1:
+        return WritePrivateProfileStringA("Ski", "FS", "12 34 ",
+                                          "entpack.ini");
+    case 2:
+    case 3:
+        return GetPrivateProfileStringA("Ski", op == 2 ? "SS" : "FS", "",
+                                        g_ini_probe, sizeof g_ini_probe,
+                                        "entpack.ini");
+    }
+    return -1;
+}
+
+EMSCRIPTEN_KEEPALIVE
+const char *ski_test_ini_result(void) { return g_ini_probe; }
 
 /* ---- MessageBoxA ----------------------------------------------------------- */
 /* MessageBoxA — the three call sites (traced 2026-09-01):
@@ -597,21 +700,26 @@ int WritePrivateProfileStringA(LPCSTR section, LPCSTR key, LPCSTR val,
  *     statement and every caller's post-box code is `return;`
  *     (ski_core.c:1638/1679/1715).
  *
- * Design (full write-up in shim/API.md): the pump is single-threaded
- * (rAF), so the box cannot block in C. When the game raises a box,
- * shim_modal_raise (win.c) records the pending state + site, logs the
- * box to the console, and longjmps to ski_mainloop's setjmp; the pump
- * then SUSPENDS the game — no timers, no messages, no paint (M2 s08
- * evidence: original and rebuild both 0px while a box is up). The
- * harness answers via the EMSCRIPTEN_KEEPALIVE hook
- * ski_messagebox_answer(r); on the next pump frame the site epilogue
- * runs (assert: `if (r == 2) DestroyWindow(g_c6c8); ski_pause_toggle();`
- * — fatal/score: none) and the game resumes. The one-frame deferral of
- * the epilogue (vs. synchronous in Win32) is invisible: the box blocks
- * every tick, and the epilogue touches only window/pause state.
- * A box raised outside the pump (boot-time fatal path, before the rAF
- * loop starts) falls through and returns IDOK synchronously — the
- * callers' epilogues are then plain returns. */
+ * Design (full write-up in the win.c modal note + shim/API.md): wine
+ * 9.0 (the contract) keeps the main window's callback timer firing
+ * AND its WM_PAINTs delivering while a modal box is up — the world
+ * keeps ticking and painting behind it (T20-review controlled probe,
+ * /tmp/t20review/modal_probe2.log: ticks 6..145 + paints 16..144 all
+ * with box_up=1). The box cannot block in C (emscripten_sleep was
+ * rejected empirically — see the win.c note), so the yield is
+ * pump-level: shim_modal_raise (win.c) records the box + its site and
+ * returns IDOK immediately, the rAF pump KEEPS DISPATCHING (timer +
+ * paint; input is dropped — the dialog owns it) while the box is up,
+ * and the harness closes it via the EMSCRIPTEN_KEEPALIVE hook
+ * ski_messagebox_answer(r), which replays the one statement the
+ * immediate return skipped (assert site: `if (r == 2)
+ * DestroyWindow(g_c6c8)` — ski_core.c:142; score/fatal: none). The
+ * game's own post-box code — the verified-faithful per-call-site
+ * epilogues (ski_core.c:141-152: the assert site's
+ * ski_pause_toggle(); the score/fatal sites' plain returns) — runs at
+ * raise time, unmodified. A box raised outside the pump (boot-time
+ * fatal path, before the rAF loop starts) returns IDOK synchronously
+ * with no modal state. */
 int MessageBoxA(HWND owner, LPCSTR text, LPCSTR caption, UINT type)
 {
     char line[600];
@@ -620,7 +728,5 @@ int MessageBoxA(HWND owner, LPCSTR text, LPCSTR caption, UINT type)
              owner ? "main" : "NULL", (unsigned long)type,
              caption ? caption : "", text ? text : "");
     console_c(line);
-    shim_modal_raise(owner, text, caption, type);
-    return 1; /* out-of-pump fallback (boot-time): IDOK; in-pump the
-                 raise longjmps and never returns here */
+    return shim_modal_raise(owner, text, caption, type);
 }

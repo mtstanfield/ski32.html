@@ -85,10 +85,10 @@ KERNEL32 48, USER32 33, GDI32 14, WINMM 1.
 | `LoadIconA` | non-NULL dummy; class icon "iconSki" (ski_win.c:813) |
 | `LoadCursorA` | non-NULL dummy; IDC_ARROW (0x7f00) for both classes (ski_win.c:814, 821) |
 | `OpenIcon` | identity restore (single-instance guard, ski_win.c:789) |
-| `MessageBoxA` | **Deterministic modal in the pump** (T20). Three call sites: assert box 0x31 MB_ICONHAND\|MB_YESNO (the only site that reads the return: `if (r == 2) DestroyWindow(g_c6c8)` — ski_core.c:141-143; 2 is the IDCANCEL literal the original compares, the IDNO macro is never used), fatal box 0x30 MB_ICONERROR\|MB_OK (ski_core.c:158, return ignored), high-score modal type 0, owner = main window (ski_core.c:2812, return ignored). Design: the pump is single-threaded (rAF) so the box cannot block in C. When the game raises a box, `shim_modal_raise` (win.c) records the box (type/text/caption/site) + logs it to the console, then longjmps to `ski_mainloop`'s setjmp (armed once per rAF frame; the buffer is only targeted while live — a `g_in_pump` guard). The pump then SUSPENDS the game — no ticks, no messages, no paint — exactly matching the M2 s08 evidence (original and rebuild both 0px while a box is up). The harness answers via `ski_messagebox_answer(r)` (1 = IDOK, 2 = IDCANCEL); on the next pump frame the site epilogue runs (assert: `if (r == 2) DestroyWindow(g_c6c8); ski_pause_toggle()` — fatal/score: none) and the game resumes. The one-frame deferral of the epilogue (vs synchronous Win32) is invisible: the box blocks every tick and the epilogue touches only window/pause state. A box raised outside the pump (boot-time paths, before the rAF loop starts) falls through and returns IDOK synchronously — the callers' epilogues are then plain returns. JS visibility: `ski_messagebox_get/type/text/caption` (win.c KEEPALIVE hooks) |
-| `LoadStringA` | id → exact UI string from the .data table (ids 1..17, skidef.h; NOTES "String table"); copy ≤ max−1 chars, return length. The table is **1-based with a dummy "" at [0]** (id 1 = "SkiFree", id 3 = "Time:" — matches the M1-extracted resources.json group 1 and the T19 pixel-verified reference); id 0 and out-of-range fail (return 0). The group-2 strings (" <-- that's you!" / " <-- try again!") are NOT reachable via LoadStringA — the game reads them through ski_str_cache from its own .data table (skidef.h STR_SUFFIX_*), and the FindResourceA path is WAVE-only (below) |
+| `MessageBoxA` | **Pump keeps running during the modal** (T20 rework). Three call sites: assert box 0x31 MB_ICONHAND\|MB_YESNO (the only site that reads the return: `if (r == 2) DestroyWindow(g_c6c8)` — ski_core.c:141-143; 2 is the IDCANCEL literal the original compares, the IDNO macro is never used), fatal box 0x30 MB_ICONERROR\|MB_OK (ski_core.c:158, return ignored), high-score modal type 0, owner = main window (ski_core.c:2812, return ignored). Design (T20 rework): wine 9.0 (the contract) keeps the main window's callback timer firing AND its WM_PAINTs delivering while a modal box is up — the world keeps ticking and painting behind it (controlled probe: /tmp/t20review/modal_probe2.log — ticks 6..145 at full 40 ms cadence + paints 16..144, all with box_up=1; the old "M2 s08: 0px" rationale was MISATTRIBUTED — s08 contains no modal, an instrumented re-run stalls at frame 300/1200 on the F3-pause). The box cannot block in C (the emscripten_sleep loop was rejected empirically under emcc 6.0.6: pump stall with set_main_loop + ASYNCIFY; suspended-frame C-stack clobber with a JS rAF driver — win.c modal note), so the yield is PUMP-LEVEL: `shim_modal_raise` (win.c) records the box (type/text/caption/site), logs it to the console, and returns IDOK immediately; the rAF pump KEEPS DISPATCHING while the box is up — timer fires advance the virtual clock one period each, paints update the canvas, queued keyboard/mouse is DROPPED (the dialog owns the input). The game's own post-box code — the verified-faithful per-call-site epilogues (ski_core.c:141-152) — runs at raise time: score/fatal sites are plain returns; the assert site's `if (r == 2) DestroyWindow(g_c6c8)` is skipped (r == 1) and its ski_pause_toggle() runs at raise time. The harness answers via `ski_messagebox_answer(r)` (1 = IDOK, 2 = IDCANCEL), which replays the one skipped statement (assert: `if (r == 2) DestroyWindow(g_c6c8)` — ski_core.c:142; fatal/score: none) and clears the box state — it must NOT re-run the toggle (a second ski_pause_toggle would resume the game, ski_win.c:162). A box raised outside the pump (boot-time paths, before the rAF loop starts) returns IDOK synchronously with no modal state — the callers' epilogues are then plain returns. JS visibility: `ski_messagebox_get/type/text/caption` (win.c KEEPALIVE hooks) |
+| `LoadStringA` | id → exact UI string from the .data table (ids 1..17, skidef.h; NOTES "String table"); copy ≤ max−1 chars, return length. The table is **1-based with a dummy "" at [0]** (id 1 = "SkiFree", id 3 = "Time:" — matches the M1-extracted resources.json group 1 and the T19 pixel-verified reference); id 0 and out-of-range fail (return 0). The group-2 strings (" <-- that's you!" / " <-- try again!") ARE read via LoadStringA — ski_str_cache (ski_core.c:127) is the game's only string path and calls LoadStringA for every id, including STR_SUFFIX_YOU=16 / STR_SUFFIX_TRY=17 (ski_core.c:2801/2810); the FindResourceA/LoadResource/LockResource path is WAVE-type only (below) and NULL there is faithful — the PE has no WAVE node, so the reference is silent by design |
 | `LoadBitmapA` | id → the pre-decoded sprite `HBITMAP` (ids 1..0x59; see Sprite model) |
-| `wsprintfA` | `vsnprintf` — every format used in src/ is snprintf-compatible (`%s line %u`, `%5.2dm`, `%5.2dm/s`, `%7ld`, `%9ld`, `%2u:%2.2u:%2.2u.%2.2u`, `frame_%06u_main.ppm`, `P6\n%d %d\n255\n` — traced T20; no format needs native handling) |
+| `wsprintfA` | `vsnprintf` — every format used in src/ is snprintf-compatible (`%s line %u`, `%ld `, `%9ld`, `%s`, `\n\n`, `%5.2dm`, `%5.2dm/s`, `%7ld`, `%2u:%2.2u:%2.2u.%2.2u`, `frame_%06u_main.ppm`, `P6\n%d %d\n255\n` — traced T20; no format needs native handling) |
 | `FillRect` | fill rect with the brush color; the single call (ski_win.c:570, main paint) uses g_c69c = GetStockObject(0) = the wine WHITE brush (stock 0 is non-NULL under the reference's wine 9.0) → fills the main client white; a NULL brush must always no-op |
 | `FrameRect` | 1-px edge with the brush; the single call (ski_win.c:729-730) uses GetStockObject(4) = the wine BLACK brush → draws the 1-px black ring around the 123×52 status panel that IS visible in the reference (evidence/m0-original-gameplay.png); a NULL brush must always no-op |
 
@@ -210,13 +210,26 @@ bpp=4 ×89, no 1/8/24bpp present). The T20 wine-9.0 probe
 
 `EMSCRIPTEN_KEEPALIVE`: `ski_key_event(vk, down)`, `ski_click(x, y)`,
 `ski_set_input(bytes, n)` (per-tick input word, same 2-byte layout as
-`harness/gen_input.py`), `ski_tick_get()`, `ski_window_png(n)` (PNG
-dataURL of window n's framebuffer), `ski_start_pump()` (start the rAF
+`harness/gen_input.py`), `ski_tick_get()`, `ski_window_png(n, buf, cap)`
+(PNG dataURL of window n's client framebuffer, written as UTF-8 into
+buf — NUL-terminated, at most cap bytes — returning the length in
+bytes, 0 on error; EM_JS cannot marshal the dataURL back as
+`const char*` under emcc 6.0.6, so it crosses the C-buffer way the
+INI bridge uses; buf = `_malloc(cap)`, read back with `UTF8ToString`
+— both exported, see Build notes), `ski_start_pump()` (start the rAF
 pump — web/boot.js calls it once after createSki() resolves; it MUST NOT
 be called from inside the C main stack, see CreateWindowExA row), and the
 MessageBoxA modal hooks `ski_messagebox_get()`, `ski_messagebox_type()`,
 `ski_messagebox_text()`, `ski_messagebox_caption()`,
-`ski_messagebox_answer(r)` (1 = IDOK, 2 = IDCANCEL). Boot surface:
+`ski_messagebox_answer(r)` (1 = IDOK, 2 = IDCANCEL — closes the box;
+the pump keeps ticking/painting while it is up, input is dropped, see
+the MessageBoxA row), and test hooks `ski_messagebox_raise(site)`
+(raise a box without a full run: 0 = score-site shape, 1 = assert-site
+shape; the game's own post-box epilogues do NOT run, see the hook
+comment) and `ski_test_ini(op)` / `ski_test_ini_result()` (INI
+write/read round trip through the real localStorage bridge; ints only
+cross the boundary, the result buffer is read back with UTF8ToString).
+Boot surface:
 `window.__ski = createSki()` (MODULARIZE, EXPORT_NAME=createSki); the
 module resolves after main() (WinMain) returns.
 
@@ -230,9 +243,15 @@ module resolves after main() (WinMain) returns.
   (the game sources are unmodified).
 - `-sENVIRONMENT=web -sMODULARIZE=1 -sEXPORT_NAME=createSki`
   (already in CMakeLists), plus `-sEXPORT_KEEPALIVE=1` and
-  `-sEXPORTED_RUNTIME_METHODS=HEAPU8` (canvas.c's blit/png EM_JS reads
-  `Module.HEAPU8` — without the export the first paint aborts with
-  "HEAPU8 was not exported", T20).
+  `-sEXPORTED_RUNTIME_METHODS=HEAPU8,UTF8ToString,stringToUTF8`
+  (canvas.c's blit/png EM_JS reads `Module.HEAPU8` — without the export
+  the first paint aborts with "HEAPU8 was not exported", T20;
+  `UTF8ToString`/`stringToUTF8` move strings across the C-buffer hooks)
+  and
+  `-sEXPORTED_FUNCTIONS=_malloc,_free,_main` (the harness allocates +
+  frees the `ski_window_png` buffer per tick, T20 rework; `_main` is
+  listed because an explicit EXPORTED_FUNCTIONS without it triggers
+  emcc's -Wunused-main warning).
 - Boot: web/index.html (canvas 1024×768) + web/boot.js
   (`createSki().then(m => { window.__ski = m; m._ski_start_pump(); })`).
   Verified T20 in headless Chrome: module loads with no console errors

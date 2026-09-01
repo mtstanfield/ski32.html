@@ -27,6 +27,17 @@
  *    now = c698 + 40 per tick; only clock DELTAS ever reach rendered
  *    values, and those are 40*k under the virtual clock exactly as under
  *    the deterministic reference's wall clock).
+ *  - Modals: MessageBoxA does NOT stop the pump. Wine 9.0 (the contract)
+ *    keeps the main window's callback timer firing AND its WM_PAINTs
+ *    delivering while a modal box is up — the world keeps ticking and
+ *    painting behind it (controlled probe: /tmp/t20review/
+ *    modal_probe2.log, ticks 6..145 + paints 16..144 all with box_up=1).
+ *    The box is pump-level state (shim_modal_raise /
+ *    ski_messagebox_answer); the dialog itself is a separate window that
+ *    never appears in ski_window_png captures. Input is dropped while
+ *    the box is up (the dialog owns it — see mq_pop). Full design and
+ *    the empirically rejected emscripten_sleep alternatives: the modal
+ *    note below.
  *  - The game's own WinMain message loop is deliberately not pumped:
  *    GetMessageA returns 0 (quit) so WinMain exits cleanly — ski_cleanup()
  *    is a no-op in the web build (no sound loads: FindResourceA -> NULL) —
@@ -48,7 +59,6 @@
  * capture.
  */
 #include <emscripten.h>
-#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -82,30 +92,67 @@ static HDC      g_screen_dc;  /* GetDC(NULL) */
 static int      g_loop_started;
 static int      g_quit;
 
-/* ---- MessageBoxA modal state (Task 20) ----------------------------------
- * Design (the misc.c MessageBoxA note + API.md "MessageBoxA" row hold the
- * call-site trace and return-value rationale): the pump is single-
- * threaded, so the box cannot block in C. shim_modal_raise records the
- * box + its call site and, while the pump is live (g_in_pump), longjmps
- * to the setjmp at the top of ski_mainloop; the pump then suspends the
- * game — no timers, no messages, no paint (M2 s08: original and rebuild
- * both 0px while a box is up). ski_messagebox_answer(r) (JS hook) flags
- * the answer; on the next pump frame the site epilogue runs and the
- * game resumes:
+/* ---- MessageBoxA modal state (Task 20 rework — T20 review) -------------
+ * Wine 9.0 (the contract) keeps the main window's callback timer
+ * firing AND its WM_PAINTs delivering while a modal MessageBoxA is up —
+ * the world keeps ticking and painting behind the box. Controlled probe
+ * (i686-mingw under ~/.wine-ski, :99; /tmp/t20review/modal_probe2.c/.log):
+ * a window-attached 40 ms callback timer whose handler raises
+ * MessageBoxA — ticks 6..145 fire at full 40 ms cadence and WM_PAINT
+ * 16..144 reaches the main WndProc, all with box_up=1; on close the
+ * ticks continue seamlessly. The old T20 rationale "M2 s08: 0px while a
+ * box is up" was misattributed — s08 contains NO modal: an instrumented
+ * re-run (harness protocol) stalls at frame 300/1200 on the F3-pause
+ * (/tmp/t20review/s08-orig/, 301 frames; frame 300 = active gameplay).
+ * The shim does what wine does: while the box is up the rAF pump keeps
+ * dispatching (timer fires advance the virtual clock one period each;
+ * paints update the canvas). The dialog itself is a separate window
+ * that never appears in ski_window_png captures, so there is nothing
+ * else to render.
+ *
+ * Yield mechanism — the PUMP-FLAG + ANSWER-HOOK alternative. The
+ * emscripten_sleep loop was tried and rejected EMPIRICALLY (emcc 6.0.6
+ * probes, /tmp/t21fix/): (a) with -sASYNCIFY + emscripten_set_main_loop
+ * a frame suspended in emscripten_sleep blocks the scheduling of the
+ * NEXT rAF — 0 frames in 2.5 s of modal; the pump would freeze (the
+ * very deviation this rework fixes); (b) with -sASYNCIFY + a JS rAF
+ * driver that keeps frames arriving, the new frames clobber the
+ * suspended frame's C-stack locals — single-threaded asyncify does not
+ * preserve a suspended frame's stack region across a concurrent entry
+ * (8 KB sentinel buffer corrupted; the game's box-text buffers would
+ * corrupt on resume). A C call therefore cannot block: MessageBoxA
+ * (misc.c) logs the box, shim_modal_raise records the state, and it
+ * RETURNS IDOK immediately. The game's own post-box code (the
+ * per-call-site epilogues, ski_core.c:141-152 — verified faithful)
+ * then runs at raise time:
+ *   score site (owner main, type 0 — ski_core.c:2812) and fatal site
+ *     (owner NULL, type 0x30 — ski_core.c:158): post-box code is plain
+ *     `return;` / `return 0` — unobservable;
  *   assert site (owner NULL, type 0x31 — ski_core.c:141, the only site
- *     that reads the return value): if (r == 2) DestroyWindow(g_c6c8);
- *     then ski_pause_toggle() (the ski_assert_fail epilogue,
- *     ski_core.c:152);
- *   fatal site (owner NULL, type 0x30 — ski_core.c:158): none — both
- *     callers' post-box code is `return 0` (ski_core.c:117,
- *     ski_win.c:506);
- *   score site (owner main, type 0 — ski_core.c:2812): none — the box is
- *     the last statement and every caller's post-box code is `return;`
- *     (ski_core.c:1638/1679/1715).
+ *     that reads the return value): `if (r == 2) DestroyWindow(g_c6c8)`
+ *     is skipped (r == 1 — the answer hook below replays it with the
+ *     real answer); ski_pause_toggle() runs at raise time, so ticks
+ *     stop behind that bug-only box (the old T20 observable) and the
+ *     post-answer state matches wine for both answer values.
+ * The harness closes the box with ski_messagebox_answer(r) (IDOK 1 /
+ * IDCANCEL 2); it runs the per-site epilogue and the box state clears.
+ *
+ * Determinism: each timer fire is one mq_post + one dispatch1, and
+ * dispatch1 advances the virtual clock by exactly ONE period per fire,
+ * so game state stays a pure function of the tick count while a modal
+ * is up (a frame may batch several fires only after real throttling —
+ * hidden tab; no catch-up burst accumulates on close because the pump
+ * never stopped). A second box raised while one is up overwrites the
+ * state (both MessageBoxA calls have already returned; the answer
+ * resolves the last-raised site) — no call site raises a box from code
+ * that runs while a box is up: the section flags are cleared before
+ * ski_score_show (ski_core.c:1636/1677/1713) and assert/fatal are
+ * boot/bug-only paths.
+ *
  * A box raised OUTSIDE the pump (the boot-time fatal path runs inside
- * WinMain, before the rAF loop exists) returns IDOK synchronously and
- * the caller's plain-return epilogues then run unmodified. */
-static jmp_buf g_modal_jmp;
+ * WinMain, before the rAF loop exists) returns IDOK synchronously,
+ * sets no modal state, and the caller's plain-return epilogues run
+ * unmodified. */
 static int     g_in_pump;      /* dispatching inside ski_mainloop */
 static int     g_modal_active; /* box up (pending or answered) */
 static int     g_modal_answered;
@@ -116,11 +163,12 @@ static char    g_modal_text[512];
 static char    g_modal_caption[128];
 
 extern HWND g_c6c8;          /* src/ski_game.h:0x40c6c8 main window */
-extern void ski_pause_toggle(void); /* src/ski_win.c:162 (ski_game.h) */
 
-void shim_modal_raise(HWND owner, const char *text, const char *caption,
-                      UINT type)
+int shim_modal_raise(HWND owner, const char *text, const char *caption,
+                     UINT type)
 {
+    if (!g_in_pump)
+        return 1; /* boot-time box: IDOK, no modal state (see note) */
     g_modal_is_assert = (owner == NULL && type == 0x31);
     g_modal_type = (int)type;
     g_modal_active = 1;
@@ -129,8 +177,8 @@ void shim_modal_raise(HWND owner, const char *text, const char *caption,
     snprintf(g_modal_text, sizeof g_modal_text, "%s", text ? text : "");
     snprintf(g_modal_caption, sizeof g_modal_caption, "%s",
              caption ? caption : "");
-    if (g_in_pump)
-        longjmp(g_modal_jmp, 1); /* back to ski_mainloop; never returns */
+    return 1; /* IDOK — the yield is pump-level: the pump keeps
+                dispatching until ski_messagebox_answer (see note) */
 }
 
 int shim_modal_pending(void) { return g_modal_active && !g_modal_answered; }
@@ -146,10 +194,22 @@ const char *shim_modal_caption(void)
 
 EMSCRIPTEN_KEEPALIVE void ski_messagebox_answer(int r)
 {
-    if (g_modal_active && !g_modal_answered) {
-        g_modal_answer = r;
-        g_modal_answered = 1;
-    } /* the next pump frame runs the epilogue */
+    if (!g_modal_active || g_modal_answered)
+        return;
+    g_modal_answer = r;
+    g_modal_answered = 1;
+    g_modal_active = 0; /* box closed */
+    /* Per-site epilogue — the statement the immediate return value
+     * skipped (see the modal note): the assert site's
+     * `if (r == 2) DestroyWindow(g_c6c8)` (ski_core.c:142; 2 is the
+     * IDCANCEL literal the original compares). The game ran the rest of
+     * its post-box code at raise time: the assert site's
+     * ski_pause_toggle() (ski_core.c:152), the score/fatal sites' plain
+     * returns (ski_core.c:1638/1679/1715, 117, ski_win.c:506) — so this
+     * hook must NOT re-run the toggle (a second ski_pause_toggle would
+     * resume the game: g_c650 latches 0 -> ski_resume, ski_win.c:162). */
+    if (g_modal_is_assert && g_modal_answer == 2)
+        DestroyWindow(g_c6c8);
 }
 
 EMSCRIPTEN_KEEPALIVE int ski_messagebox_get(void)
@@ -169,15 +229,33 @@ EMSCRIPTEN_KEEPALIVE const char *ski_messagebox_caption(void)
     return shim_modal_caption();
 }
 
-static void modal_epilogue(void)
+/* Test hook (T20-review verification; the T21 harness needs it too):
+ * raise a modal box from JS without playing a full run. `site` selects
+ * the call shape: 0 = score site (owner = main window, type 0,
+ * ski_core.c:2812), 1 = assert site (owner NULL, type 0x31,
+ * ski_core.c:141). The hook calls the REAL MessageBoxA (shim modal
+ * state + console log) so the pump-during-modal, input-drop and answer
+ * behavior are the game's, but the game's own post-box epilogues
+ * (ski_core.c:141-152) do NOT run — ski_messagebox_answer replays the
+ * shim-side one (assert site: `if (r == 2) DestroyWindow(g_c6c8)`).
+ * Returns the value MessageBoxA returned — IDOK: the yield is
+ * pump-level (see the modal note).
+ *
+ * The call comes from JS — outside ski_mainloop — so g_in_pump is
+ * faked around the MessageBoxA call: a game raise always happens
+ * inside the pump's dispatch (timer -> ski_tick -> ... -> MessageBoxA),
+ * and shim_modal_raise only records state for in-pump raises. */
+EMSCRIPTEN_KEEPALIVE
+int ski_messagebox_raise(int site)
 {
-    if (g_modal_is_assert) {
-        if (g_modal_answer == 2 /* IDCANCEL literal, ski_core.c:142 */)
-            DestroyWindow(g_c6c8);
-        ski_pause_toggle(); /* ski_assert_fail epilogue (ski_core.c:152) */
-    }
-    g_modal_active = 0;
-    g_modal_answered = 0;
+    int r;
+    g_in_pump = 1;
+    if (site == 1)
+        r = MessageBoxA(NULL, "T20 test box", "Assertion Failed", 0x31);
+    else
+        r = MessageBoxA(g_hmain, "T20 test box", "High Scores", 0);
+    g_in_pump = 0;
+    return r;
 }
 
 static void ski_mainloop(void);              /* rAF pump + scheduler */
@@ -213,16 +291,31 @@ void shim_post(HWND h, unsigned msg, unsigned long wp, long lp)
     mq_post((ShimWin *)h, (UINT)msg, (WPARAM)wp, (LPARAM)lp);
 }
 
-/* Next message: first any queued (non-paint) message in FIFO order, then —
- * only when the queue is empty, as in real Windows — a full-client
- * WM_PAINT for the first dirty visible window. */
+/* Input messages: the only keyboard/mouse the game can receive (posted
+ * by ski_key_event / ski_click). While a modal box is up the DIALOG
+ * owns the input — wine 9.0 delivers no keys/clicks to the main window
+ * behind the box (the modal note) — so mq_pop drops them; timers and
+ * paints flow. */
+static int is_input_msg(UINT msg)
+{
+    return msg == 0x0100 /* WM_KEYDOWN */ ||
+           msg == 0x0102 /* WM_CHAR */ ||
+           msg == 0x0201 /* WM_LBUTTONDOWN */ ||
+           msg == 0x0202; /* WM_LBUTTONUP */
+}
+
+/* Next message: first any queued (non-dropped) message in FIFO order,
+ * then — only when the queue is empty, as in real Windows — a
+ * full-client WM_PAINT for the first dirty visible window. */
 static int mq_pop(MqMsg *out)
 {
     int i;
-    if (g_mq_c > 0) {
+    while (g_mq_c > 0) {
         *out = g_mq[g_mq_r];
         g_mq_r = (g_mq_r + 1) % SKI_MQ_CAP;
         g_mq_c--;
+        if (shim_modal_pending() && is_input_msg(out->msg))
+            continue; /* modal up: the dialog eats the input */
         return 1;
     }
     for (i = 0; i < SKI_WIN_MAX; i++) {
@@ -718,29 +811,22 @@ static void ski_mainloop(void)
 {
     MqMsg m;
     int acted = 0;
-    /* 0 = fresh frame; 1 = a MessageBoxA longjmp from inside a dispatch
-     * below (the game call chain is unwound; the modal state is set).
-     * The buffer is re-armed on every rAF and targeted at most once per
-     * arming — no setjmp reuse. */
-    (void)setjmp(g_modal_jmp);
-    g_in_pump = 0; /* a longjmp just landed (or fresh frame): only the
-                     dispatch loop below counts as in-pump */
     if (g_quit) {
         emscripten_cancel_main_loop();
         return;
     }
-    if (g_modal_active) {
-        if (g_modal_answered) {
-            modal_epilogue();
-        } else {
-            return; /* box up: no ticks, no messages, no paint (M2 s08:
-                       0px) — the canvas is frozen exactly as the
-                       reference's wine modal froze the window */
-        }
-    }
+    /* A modal box up does NOT suspend the pump: wine 9.0 keeps the
+     * main window's timer firing and painting behind the box (the modal
+     * note) — the world ticks and repaints until
+     * ski_messagebox_answer closes it. Input is dropped in mq_pop. */
     g_in_pump = 1;
     if (g_timer_armed && g_hmain && !g_hmain->dead) {
         double now = emscripten_get_now();
+        /* Catch-up after REAL throttling (hidden tab) only: with no
+         * pump suspension, no backlog accumulates behind a modal, so
+         * nothing bursts on close. Each fire posts one WM_TIMER and
+         * dispatch1 advances the virtual clock exactly one period per
+         * dispatch — state stays a pure function of the tick count. */
         while (now >= g_next_real && mq_space()) {
             mq_post(g_hmain, WM_TIMER, g_tick_id, 0);
             g_next_real += (double)g_timer_period;

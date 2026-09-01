@@ -26,6 +26,21 @@ elseif(SKI_CC_MINGW GREATER -1 OR CMAKE_SYSTEM_NAME STREQUAL "Windows")
   # does not detect the RC compiler, so invoke windres explicitly and link
   # the produced object. windres resolves bitmap paths relative to CWD;
   # give it the source root so res/bmp_NNN.bmp resolves.
+  # ${CMAKE_RC_COMPILER} has no default: a FRESH configure (no cache
+  # variable) would fail at resources.rc (T20 review). Default it from
+  # the C compiler's triple (i686-w64-mingw32-gcc ->
+  # i686-w64-mingw32-windres), falling back to a bare windres.
+  if(NOT CMAKE_RC_COMPILER)
+    get_filename_component(SKI_CC_BASE "${CMAKE_C_COMPILER}" NAME)
+    string(REGEX REPLACE "(.*)gcc$" "\\1windres" SKI_RC_GUESS
+           "${SKI_CC_BASE}")
+    find_program(CMAKE_RC_COMPILER NAMES "${SKI_RC_GUESS}" windres)
+    if(NOT CMAKE_RC_COMPILER)
+      message(FATAL_ERROR
+        "no RC compiler found (tried ${SKI_RC_GUESS}, windres); "
+        "set CMAKE_RC_COMPILER")
+    endif()
+  endif()
   set(SKI_RC_OBJ "${CMAKE_CURRENT_BINARY_DIR}/resources.rc.o")
   add_custom_command(
     OUTPUT "${SKI_RC_OBJ}"
@@ -47,12 +62,21 @@ if(SKI_SOURCES)
     # `#include <windows.h>` in the unmodified game sources must resolve to
     # shim/windows.h (API.md "Build notes").
     target_include_directories(ski PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/shim)
+    # HEAPU8 (canvas.c's blit/png EM_JS reads Module.HEAPU8),
+    # UTF8ToString + _malloc (the C-buffer debug hooks — ski_window_png
+    # writes its dataURL into a caller-_malloc'd buffer; the T21 harness
+    # reads it back with UTF8ToString).
     target_link_options(ski PRIVATE
       -sENVIRONMENT=web
       -sINITIAL_MEMORY=16MB
       -sALLOW_MEMORY_GROWTH=1
       -sEXPORT_KEEPALIVE=1
-      -sEXPORTED_RUNTIME_METHODS=HEAPU8
+      -sEXPORTED_RUNTIME_METHODS=HEAPU8,UTF8ToString,stringToUTF8
+      # _main stays listed: an explicit EXPORTED_FUNCTIONS without it
+      # makes emcc warn (-Wunused-main); INVOKE_RUN (default) still runs
+      # main at instantiation either way. _free: the T21 harness
+      # allocates the ski_window_png buffer per tick.
+      -sEXPORTED_FUNCTIONS=_malloc,_free,_main
       -sMODULARIZE=1 -sEXPORT_NAME=createSki
       -o $<TARGET_FILE_DIR:ski>/ski.js
     )

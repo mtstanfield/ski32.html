@@ -19,8 +19,11 @@
  *                            fopen("ski_in.bin").
  *   ski_tick_get()           ticks completed (== g_ski_tick; the T21
  *                            mjs polls it to step exactly N ticks).
- *   ski_window_png(n)        PNG dataURL of window n's client framebuffer
- *                            (own surface + visible child overlays).
+ *   ski_window_png(n, buf, cap)  PNG dataURL of window n's client
+ *                            framebuffer (own surface + visible child
+ *                            overlays), written as UTF-8 into buf
+ *                            (NUL-terminated, at most cap bytes);
+ *                            returns the length in bytes (0 on error).
  *   ski_key_event(vk, down)  interactive key -> WM_KEYDOWN (+ WM_CHAR for
  *                            printable VCs; the binary has no WM_KEYUP
  *                            path, so up events are ignored).
@@ -57,8 +60,13 @@ EM_JS(void, canvas_put, (int x, int y, int w, int h, int ptr),
   ctx.putImageData(img, x, y);
 });
 
-/* PNG dataURL of a tight w*h*4 RGBA heap block (offscreen 2D canvas). */
-EM_JS(const char *, canvas_png, (int w, int h, int ptr),
+/* PNG dataURL of a tight w*h*4 RGBA heap block (offscreen 2D canvas).
+ * The dataURL crosses via a C buffer: on emcc 6.0.6 a JS string
+ * returned as 'const char*' marshals to NULL (T20-review Chrome probe:
+ * _ski_window_png(0) returned 0; repros /tmp/t20review/emjs) — so JS
+ * writes UTF-8 into buf (cap bytes) and returns the length (ints
+ * marshal fine both ways). */
+EM_JS(int, canvas_png, (int w, int h, int ptr, char *buf, int cap),
 {
   const cv = document.createElement('canvas');
   cv.width = w;
@@ -68,7 +76,13 @@ EM_JS(const char *, canvas_png, (int w, int h, int ptr),
   const img = new ImageData(
       new Uint8ClampedArray(u8.buffer, ptr, w * h * 4), w, h);
   ctx.putImageData(img, 0, 0);
-  return cv.toDataURL('image/png');
+  const s = cv.toDataURL('image/png');
+  if (cap > 0)
+    stringToUTF8(s, buf, cap);
+  /* The dataURL is pure ASCII ("data:image/png;base64," + base64), so
+   * s.length is the exact UTF-8 byte length — lengthBytesUTF8 is NOT
+   * in EM_JS scope on emcc 6.0.6 (T20-fix web probe). */
+  return s.length;
 });
 
 /* ---- compositing ---------------------------------------------------------- */
@@ -210,17 +224,23 @@ EMSCRIPTEN_KEEPALIVE int ski_tick_get(void)
     return shim_ticks_fired();
 }
 
-EMSCRIPTEN_KEEPALIVE const char *ski_window_png(int n)
+/* Writes the window's PNG dataURL into buf (at most cap bytes,
+ * NUL-terminated) and returns its length in bytes (0 on error — no
+ * such window / no surface / cap <= 0). The dataURL of the 760x734
+ * main client is ~35 KB (T20-fix web probe: 35142); the caller (the
+ * T21 harness) _malloc's the buffer and reads it back with
+ * Module.UTF8ToString (both exported — CMakeLists build notes). */
+EMSCRIPTEN_KEEPALIVE int ski_window_png(int n, char *buf, int cap)
 {
     ShimWin *w = shim_window(n);
     int pw, ph;
     uint8_t *c;
-    if (!w)
-        return "";
+    if (!w || cap <= 0)
+        return 0;
     c = window_composite(w, &pw, &ph);
     if (!c)
-        return "";
-    return canvas_png(pw, ph, (int)(uintptr_t)c);
+        return 0;
+    return canvas_png(pw, ph, (int)(uintptr_t)c, buf, cap);
 }
 
 EMSCRIPTEN_KEEPALIVE void ski_key_event(unsigned vk, int down)

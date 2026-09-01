@@ -30,14 +30,18 @@ void     shim_post(HWND h, unsigned msg, unsigned long wp, long lp);
 int      shim_ticks_fired(void);  /* game WM_TIMER dispatches (== g_ski_tick) */
 void     canvas_flush(void);      /* canvas.c: upload window surfaces */
 
-/* MessageBoxA modal (Task 20; design in the misc.c MessageBoxA note and
- * the API.md MessageBoxA row). shim_modal_raise records the pending box
- * and, while the pump is live, longjmps to ski_mainloop's setjmp — it
- * does NOT return in that case; out-of-pump (boot-time) it returns and
- * the caller continues with IDOK. While a box is up the pump suspends
- * the game (no timers/messages/paint); ski_messagebox_answer(r) resolves
- * it and the per-site epilogue runs on the next pump frame. */
-void         shim_modal_raise(HWND owner, const char *text, const char *caption,
+/* MessageBoxA modal (Task 20 rework; design in the win.c modal note and
+ * the API.md MessageBoxA row). shim_modal_raise records the box and
+ * RETURNS IDOK (1) immediately — the yield is pump-level: the rAF pump
+ * keeps dispatching (timers + paints; input is dropped — the dialog
+ * owns it) while the box is up, exactly as wine 9.0 keeps the main
+ * window's timer + WM_PAINT flowing behind a modal (T20-review
+ * /tmp/t20review/modal_probe2.log). The game's own post-box code
+ * (ski_core.c:141-152) runs at raise time; ski_messagebox_answer(r)
+ * closes the box and replays the one statement the immediate return
+ * skipped (assert site: DestroyWindow iff r == 2). Out-of-pump
+ * (boot-time) it returns IDOK with no modal state. */
+int          shim_modal_raise(HWND owner, const char *text, const char *caption,
                               UINT type);
 int          shim_modal_pending(void); /* 1 while the box is up (unanswered) */
 int          shim_modal_type(void);    /* UINT type of the raised box */

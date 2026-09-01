@@ -6,7 +6,11 @@
  *   __ski.ski_tick_get()            ticks completed
  *   __ski.ski_key_event(vk, down)   interactive keys
  *   __ski.ski_click(x, y)           canvas clicks
- *   __ski.ski_window_png(n)         PNG dataURL of window n's client
+ *   __ski.ski_window_png(n, ptr, cap)  PNG dataURL of window n's client,
+ *                                      written UTF-8 into buf ptr (cap
+ *                                      bytes); returns length (0 = error).
+ *                                      buf = __ski._malloc(cap); read it
+ *                                      back with __ski.UTF8ToString(ptr)
  *   __ski.ski_messagebox_get()      1 while a MessageBoxA box is up
  *   __ski.ski_messagebox_type()     the box's UINT type
  *   __ski.ski_messagebox_text()     box text

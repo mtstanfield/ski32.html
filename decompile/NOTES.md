@@ -1595,9 +1595,14 @@ faithful GetTickCount difference is transcribed.
   MessageBox showing `0:01:28.32 <-- that's you!` (fmt_time + STR_SUFFIX_YOU,
   entpack.ini round-trip) — captured in `evidence/m2-gamecore.png` (client
   area is white because T12 rendering is still stubbed; status labels
-  Time:/Dist:/Speed:/Style: render top-right). Ticks freeze while the modal
-  is up (message loop blocked — original behavior). Closing the modal
-  (Return) and pressing F2 restarts: full state reset observed
+  Time:/Dist:/Speed:/Style: render top-right). Ticks keep ADVANCING while the
+  modal is up — wine 9.0's modal message loop keeps the main window's
+  callback timer firing and its WM_PAINTs delivering (T20-review
+  controlled probe, /tmp/t20review/modal_probe2.log: ticks 6..145 at
+  full 40 ms cadence + paints 16..144, all with box_up=1 — the earlier
+  "ticks freeze" reading was wrong; the web shim mirrors this: the pump
+  keeps dispatching while the box is up, T20 rework). Closing the modal
+  and pressing F2 restarts: full state reset observed
   (cam_y=0, c5d8=0, c714=0, player x=0 y=0 fr=3 steer=0 speed=0) with ticks
   resuming at ~25/s.
 
