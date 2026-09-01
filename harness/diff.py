@@ -3,9 +3,13 @@
 
 Usage: diff.py ORIG_DIR REBUILD_DIR [options]
 
-Frames: frame_%06d_main.ppm (P6 top-down 24bpp), index = game tick (first
-dumped tick = 1). Both streams must be tick-aligned (tick-boundary dumps;
-no wall-clock resync needed).
+Frames: frame_%06d_main.ppm (P6 top-down 24bpp; DIB B,G,R byte order —
+load_ppm normalizes to true RGB) or frame_%06d_main.png (RGB, true);
+index = game tick (first dumped tick = 1). Both streams must be
+tick-aligned (tick-boundary dumps; no wall-clock resync needed). The
+M2 rebuild-vs-original runs are PPM on both sides; the T21
+WASM-vs-rebuild diff is PPM (rebuild reference) vs PNG (the WASM
+harness's per-tick captures, harness/wasm_capture.mjs).
 
 Scene region = full client frame (760x734) minus the status-panel mask.
 Default mask 620,0,760,60 covers the Time/Dist/Speed/Style panel (top-right),
@@ -32,7 +36,20 @@ import numpy as np
 
 
 def load_ppm(path: str) -> np.ndarray:
-    """P6 top-down 24bpp -> HxWx3 uint8."""
+    """P6 top-down 24bpp -> HxWx3 uint8, normalized to TRUE RGB.
+
+    The harness writers dump the client DC via a DIB section and write
+    the raster's first 3 bytes verbatim (rebuild: ski_core.c
+    ski_harness_frame "P6 top-down 24bpp from the 32bpp raster";
+    original: T14 orig_stub.asm "24bpp BGR top-down ... w*3*h BGR, two
+    writes, no copy"). DIB byte order is B,G,R — so the file's "RGB"
+    triplets are actually B,G,R. Swap them here so PPM streams compare
+    pixel-exact against the T21 WASM PNG captures (true RGB: the shim's
+    window buffer is RGB byte-order and canvas_png encodes it as RGB —
+    verified 2026-09-01 against evidence/m0-original-menu.png, a
+    true-color wine screenshot: swap(PPM) matches it, the PNG matches
+    the PPM's swap frame-exact at the menu walk). PPM-vs-PPM results
+    are unaffected: the swap is a bijection applied to both sides."""
     with open(path, "rb") as f:
         data = f.read()
     # header: P6\nW H\n255\n  (whitespace-separated, no comments produced)
@@ -59,11 +76,32 @@ def load_ppm(path: str) -> np.ndarray:
     px = data[i:i + w * h * 3]
     if len(px) != w * h * 3:
         raise ValueError(f"{path}: short pixel data {len(px)} != {w*h*3}")
-    return np.frombuffer(px, dtype=np.uint8).reshape(h, w, 3).copy()
+    return np.ascontiguousarray(np.frombuffer(px, dtype=np.uint8).reshape(h, w, 3)[:, :, ::-1])
+
+
+def load_png(path: str) -> np.ndarray:
+    """RGB PNG -> HxWx3 uint8 (PIL, in harness/.venv)."""
+    from PIL import Image
+    with Image.open(path) as im:
+        return np.asarray(im.convert("RGB"), dtype=np.uint8)
+
+
+def load_frame(path: str) -> np.ndarray:
+    p = pathlib.Path(path)
+    if p.suffix == ".png":
+        return load_png(str(p))
+    return load_ppm(str(p))
 
 
 def frame_path(d: str, tick: int):
-    return pathlib.Path(d) / f"frame_{tick:06d}_main.ppm"
+    """frame_{tick:06d}_main.{ppm,png} — whichever exists (the T21 WASM
+    side captures PNGs, the rebuild/original sides PPMs)."""
+    p = pathlib.Path(d)
+    for ext in ("ppm", "png"):
+        f = p / f"frame_{tick:06d}_main.{ext}"
+        if f.exists():
+            return f
+    return p / f"frame_{tick:06d}_main.ppm"
 
 
 def list_frames(d: str):
@@ -72,7 +110,8 @@ def list_frames(d: str):
         return []
     ticks = []
     for f in p.iterdir():
-        if f.name.startswith("frame_") and f.name.endswith("_main.ppm"):
+        if f.name.startswith("frame_") and (
+                f.name.endswith("_main.ppm") or f.name.endswith("_main.png")):
             try:
                 ticks.append(int(f.name[6:12]))
             except ValueError:
@@ -123,8 +162,8 @@ def main() -> int:
             print(f"tick {t}: missing frame (orig {ro.name} rebuild {rr.name})")
             n_fail += 1
             continue
-        im_o = load_ppm(str(ro))
-        im_r = load_ppm(str(rr))
+        im_o = load_frame(str(ro))
+        im_r = load_frame(str(rr))
         if im_o.shape != im_r.shape:
             print(f"tick {t}: size mismatch {im_o.shape} vs {im_r.shape}")
             n_fail += 1

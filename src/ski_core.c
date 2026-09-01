@@ -2473,6 +2473,19 @@ void ski_game_physics(void)
 #if SKI_HARNESS
 #include "ski_keys.h"
 
+#ifdef __EMSCRIPTEN__
+/* T21 WASM diff build (shim/canvas.c): the per-tick input words are
+ * pushed from JS (ski_set_input) instead of CWD/ski_in.bin, and the
+ * capture below seals the main client into the shim ring the harness
+ * mjs pulls as frame_%06d_main.png — the wine-side DIB+PPM path in
+ * ski_harness_frame is scaffolding for the native build only
+ * (#ifndef __EMSCRIPTEN__ below), so the WASM build never references
+ * CreateDIBSection and never writes a PPM. */
+extern const unsigned char *g_ski_in;
+extern int g_ski_in_n;
+void ski_shim_frame_seal(void);
+#endif
+
 static uint32_t g_har_tick;             /* frame/word index (0-based) */
 static FILE    *g_har_in;               /* ski_in.bin */
 static uint8_t *g_har_buf;              /* DIB section raster (owned) */
@@ -2501,14 +2514,32 @@ static void ski_har_dbg(const char *s)
 static int ski_harness_ready(void)
 {
     if (g_har_state < 0) {
+#ifdef __EMSCRIPTEN__
+        /* nopump boot (web/boot.js ?nopump=1): the harness mjs installs
+         * the input before ski_start_pump, so the first ready() — at
+         * tick 1 — already sees the array. */
+        g_har_state = (g_ski_in != NULL) ? 1 : 0;
+#else
         g_har_in = fopen("ski_in.bin", "rb"); /* absent on normal runs: inert */
         g_har_state = (g_har_in != NULL) ? 1 : 0;
+#endif
     }
     return g_har_state;
 }
 
 static void ski_harness_frame(void)
 {
+#ifdef __EMSCRIPTEN__
+    /* T21: the wine-side capture below (DIB section + BitBlt + P6 write)
+     * is scaffolding for the native harness build; on WASM the harness
+     * mjs owns the file write. Seal THIS game state — main client,
+     * after the previous tick body, BEFORE word[g_har_tick] injection
+     * (the rebuild's frame_%06d_main.ppm point, tick-exact, so WASM
+     * frame k == rebuild frame k with diff.py --shift 0) — into the
+     * shim ring (shim/canvas.c). */
+    ski_shim_frame_seal();
+    return;
+#else
     RECT rc;
     int32_t w, h;
     if (g_c6c8 == NULL) {
@@ -2584,16 +2615,26 @@ static void ski_harness_frame(void)
             fwrite(p + (size_t)x * 4, 1, 3, f);
     }
     fclose(f);
+#endif
 }
 
 static void ski_harness_inject(void)
 {
     uint8_t b[2];
+#ifdef __EMSCRIPTEN__
+    /* g_ski_in: u16 LE words, 2 bytes/tick (harness/gen_input.py layout);
+     * word count = g_ski_in_n / 2. Same single injection mechanism below. */
+    if (g_ski_in == NULL || (uint32_t)g_ski_in_n < g_har_tick * 2 + 2)
+        return; /* no input set / past the scenario */
+    b[0] = g_ski_in[(size_t)g_har_tick * 2];
+    b[1] = g_ski_in[(size_t)g_har_tick * 2 + 1];
+#else
     if (g_har_in == NULL)
         return;
     if (fseek(g_har_in, (long)g_har_tick * 2, SEEK_SET) != 0 ||
         fread(b, 1, 2, g_har_in) != 2)
         return; /* past the scenario: no further input */
+#endif
     uint16_t w = (uint16_t)(b[0] | ((uint16_t)b[1] << 8));
     for (int i = 0; i < SKI_NUM_KEYS; i++)
         if (w & (1u << i))
@@ -2635,8 +2676,10 @@ void ski_tick(void)
 
 #if SKI_HARNESS
     g_ski_tick++;
+#ifndef __EMSCRIPTEN__
     /* Harness liveness probe (T13 builds): dump the tick counter to a
-     * known file once per second (25 ticks at the 40 ms period). */
+     * known file once per second (25 ticks at the 40 ms period).
+     * Wine-side only: the T21 WASM harness mjs owns the run log. */
     if ((g_ski_tick & 0x1f) == 0) {
         FILE *f = fopen("/tmp/ski_ticks", "w");
         if (f) {
@@ -2644,6 +2687,7 @@ void ski_tick(void)
             fclose(f);
         }
     }
+#endif
 #endif
 }
 

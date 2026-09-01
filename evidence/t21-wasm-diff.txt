@@ -1,0 +1,8 @@
+diff harness/frames/rebuild_s01_menu vs harness/frames/wasm_s01_menu: 301 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/rebuild_s02_start vs harness/frames/wasm_s02_start: 401 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/rebuild_s03_steering vs harness/frames/wasm_s03_steering: 801 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/rebuild_s04_crouch vs harness/frames/wasm_s04_crouch: 401 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/rebuild_s05_modes vs harness/frames/wasm_s05_modes: 801 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/rebuild_s06_longrun vs harness/frames/wasm_s06_longrun: 3001 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/rebuild_s07_monster vs harness/frames/wasm_s07_monster: 4001 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/rebuild_s08_pause_scores vs harness/frames/wasm_s08_pause_scores: 301 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS

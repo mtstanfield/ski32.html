@@ -205,6 +205,84 @@ void canvas_flush(void)
     }
 }
 
+/* ---- T21 frame seal (WASM diff build) --------------------------------------
+ * The SKI_HARNESS capture (ski_harness_frame, src/ski_core.c) fires at
+ * the TOP of every ski_tick: frame k = main-window client after tick
+ * body k, BEFORE word k is injected — the exact game state the native
+ * harness dumps as frame_%06d_main.ppm, so a seal at this call point
+ * makes WASM frame k == rebuild frame k (diff.py --shift 0). On WASM
+ * the harness mjs owns the file writes, so the game-side capture seals
+ * the client composite (own surface + visible child overlays — the
+ * status panel; the panel region is inside diff.py's mask, and the
+ * native BitBlt's parent-DC content there is the stale parent backing
+ * anyway) into this ring and bumps the counter; the mjs polls
+ * _ski_frame_get() and pulls each sealed frame as a PNG dataURL
+ * (_ski_frame_pull). The ring is 4 deep: a CDP pull can lag up to 4
+ * ticks (160 ms at the 40 ms real-time cadence) without overwriting
+ * an un-pulled frame. Seal = one composite + memcpy at tick time
+ * (~2.2 MB, sub-millisecond); the PNG encode happens on pull, so the
+ * tick path stays fast and the virtual clock — a pure function of tick
+ * history — is untouched by capture latency.
+ *
+ * Compiled only in the SKI_HARNESS diff build: the ring (4 x 2.2 MB)
+ * is dead static mass in the shipping web build (HARNESS=OFF), where
+ * the game never calls the seal, and the debug exports must not ship.
+ */
+#if SKI_HARNESS
+#define SKI_SEAL_RING 4
+static uint8_t *g_seal; /* SKI_SEAL_RING * w * h * 4 (RGBA, top-down) */
+static int g_seal_w, g_seal_h;
+static int g_seal_n;    /* frames sealed since boot; frame idx == k seals at n=k+1 */
+
+void ski_shim_frame_seal(void)
+{
+    ShimWin *w = shim_window(0); /* the main window (g_c6c8) */
+    int pw, ph;
+    const uint8_t *c;
+    size_t npx;
+    if (!w)
+        return;
+    c = window_composite(w, &pw, &ph);
+    if (!c)
+        return;
+    npx = (size_t)pw * (size_t)ph * 4;
+    if (g_seal_w != pw || g_seal_h != ph) {
+        /* The client is fixed for the run (the game never resizes a
+         * top-level); a realloc here would only rebase on a surprise. */
+        g_seal = realloc(g_seal, (size_t)SKI_SEAL_RING * npx);
+        if (!g_seal)
+            return;
+        g_seal_w = pw;
+        g_seal_h = ph;
+        g_seal_n = 0;
+    }
+    memcpy(g_seal + (size_t)(g_seal_n % SKI_SEAL_RING) * npx, c, npx);
+    g_seal_n++;
+}
+
+EMSCRIPTEN_KEEPALIVE int ski_frame_get(void)
+{
+    return g_seal_n; /* sealed frames so far (== frame index + 1) */
+}
+
+/* PNG dataURL of sealed frame idx (0-based == the rebuild's
+ * frame_%06d index) into buf (at most cap bytes, NUL-terminated);
+ * returns the length in bytes, 0 if idx was never sealed or has been
+ * evicted from the ring (idx < g_seal_n - SKI_SEAL_RING). */
+EMSCRIPTEN_KEEPALIVE int ski_frame_pull(int idx, char *buf, int cap)
+{
+    size_t npx;
+    const uint8_t *s;
+    if (!g_seal || cap <= 0)
+        return 0;
+    if (idx < 0 || idx >= g_seal_n || idx < g_seal_n - SKI_SEAL_RING)
+        return 0;
+    npx = (size_t)g_seal_w * (size_t)g_seal_h * 4;
+    s = g_seal + (size_t)(idx % SKI_SEAL_RING) * npx;
+    return canvas_png(g_seal_w, g_seal_h, (int)(uintptr_t)s, buf, cap);
+}
+#endif
+
 /* ---- debug hooks ---------------------------------------------------------- */
 /* Linkable globals (NOT static): the SKI_HARNESS input reader in
  * src/ski_core.c references these from T21 on. */

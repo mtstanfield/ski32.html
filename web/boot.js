@@ -19,6 +19,16 @@
  */
 "use strict";
 
+/* ?nopump=1 (T21 harness): do NOT start the pump here — the harness
+ * mjs installs the per-tick input (_ski_set_input) BEFORE the first
+ * tick, then starts the pump itself (_ski_start_pump). Without the
+ * flag the boot path is unchanged (T20: auto-pump after createSki
+ * resolves). The flag matters because the SKI_HARNESS input reader
+ * caches its ready-state on the first tick (src/ski_core.c
+ * ski_harness_ready): a tick that ran before ski_set_input would
+ * leave the harness inert for the whole run. */
+const nopump = new URLSearchParams(location.search).has("nopump");
+
 window.__ski_ready = createSki().then((mod) => {
   window.__ski = mod;
   /* The shim's rAF pump starts here, after main() (WinMain) returned:
@@ -26,6 +36,7 @@ window.__ski_ready = createSki().then((mod) => {
      (simulate_infinite_loop handoff) and the rest of boot never runs
      (shim/win.c notes). By now boot is complete: windows created,
      40 ms game timer armed, main window dirty. */
-  mod._ski_start_pump();
+  if (!nopump)
+    mod._ski_start_pump();
   return mod;
 });

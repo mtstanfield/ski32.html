@@ -234,6 +234,15 @@ int wsprintfA(LPSTR buf, LPCSTR fmt, ...)
 }
 
 /* ---- kernel32 misc --------------------------------------------------------- */
+/* GetProcessId — harness-only (the T16 probe's +2): ski_trace's header
+ * line (ski_win.c:584, SKI_HARNESS) reads it once; the wproc trace is
+ * diagnostics, never diffed. Any fixed pid is faithful. */
+DWORD GetProcessId(HANDLE proc)
+{
+    (void)proc;
+    return 1;
+}
+
 /* LocalAlloc — the game's pools (ski_init_mem, ski_core.c:106-117:
  * 0x50/0x5a0/8000/0x2400 bytes) plus the string cache (ski_core.c:129,
  * n+1). The process never imports LocalFree — the pools live for the
