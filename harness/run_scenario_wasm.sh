@@ -13,7 +13,8 @@
 # the overlap, which is the whole of the rebuild side.
 # NOTE: diff --report APPENDS one line per run to
 # evidence/t21-wasm-diff.txt — the committed 8-line file is one full suite
-# run; rm it (or use --viz-only scratch runs) before re-running the suite.
+# run; rm it before re-running the suite (scratch diffs: call diff.py
+# manually without --report).
 # Usage: bash harness/run_scenario_wasm.sh SCENARIO
 set -u
 cd "$(dirname "$0")/.."

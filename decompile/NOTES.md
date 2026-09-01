@@ -2794,9 +2794,13 @@ at 300/1200 on BOTH sides, modal poll silent); s03-s07 evidence-checked
 9. **Operational**: frame sets are huge (rebuild side 15 GB across the 8
    scenarios) — the T21 campaign hit 100% disk once (Xvfb :99 died, two
    wine runs failed, both re-ran clean; rebuild dirs were deleted after
-   diffing). A stale headless Chrome on the fixed CDP port 9333 silently
-   poisons the next capture — the mjs now fails loud on an in-use port
-   and reaps the Chrome process group (detached spawn, kill -pid).
+   diffing, and the wasm_s01_menu/wasm_s02_start capture dirs were lost
+   to the same episode — both scenarios were re-verified fresh by the T21
+   spec review; the remaining six wasm dirs are on disk under
+   harness/frames/). A stale headless Chrome on the fixed CDP port 9333
+   silently poisons the next capture — the mjs now fails loud on an
+   in-use port and reaps the Chrome process group (detached spawn,
+   kill -pid).
 
 ### Known non-blocking items
 

@@ -69,6 +69,15 @@ try {
   console.error(`debug port ${DBG_PORT} is already in use — kill the stale headless Chrome (pkill -f remote-debugging-port=${DBG_PORT}) and re-run`);
   process.exit(2);
 } catch {}
+// Same for the file-server port: an occupant serving a FOREIGN web/ would
+// otherwise slow-fail the 30 s ready check. (python http.server self-exits
+// when its own spawn hits a taken port, so this only catches foreign or
+// same-dir orphans — the latter is harmless, this is just instant.)
+try {
+  await fetch(`http://127.0.0.1:${HTTP_PORT}/`);
+  console.error(`file-server port ${HTTP_PORT} is already in use — kill the stale server (pkill -f "http.server ${HTTP_PORT}") and re-run`);
+  process.exit(2);
+} catch {}
 
 const http = spawn("python3", ["-m", "http.server", HTTP_PORT], {
   cwd: path.join(root, "web"), stdio: "ignore",
