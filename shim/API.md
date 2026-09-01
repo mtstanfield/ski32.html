@@ -208,6 +208,13 @@ bpp=4 ×89, no 1/8/24bpp present). The T20 wine-9.0 probe
 
 ## Debug hooks (Task 18/20/21, NOT in the symbol list)
 
+**JS access: emscripten exports carry the `_` prefix** — from JS use
+`window.__ski._ski_window_png(...)`, `window.__ski._ski_set_input(...)`, etc.
+(the C names below are the C-side identifiers; the unprefixed names do NOT
+exist on the module object). Integers cross the boundary directly; strings
+and buffers use the C-buffer pattern (see the `ski_window_png` row and the
+Build notes' export list).
+
 `EMSCRIPTEN_KEEPALIVE`: `ski_key_event(vk, down)`, `ski_click(x, y)`,
 `ski_set_input(bytes, n)` (per-tick input word, same 2-byte layout as
 `harness/gen_input.py`), `ski_tick_get()`, `ski_window_png(n, buf, cap)`
