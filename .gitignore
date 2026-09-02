@@ -14,5 +14,6 @@ web/ski.js
 web/ski.wasm
 web/ski.js.map
 harness/strprobe/*.exe
+harness/stub/orig_stub.bin
 original/ski32_fixed*.exe
 build-wasmdiff/
