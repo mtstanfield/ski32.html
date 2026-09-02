@@ -79,7 +79,7 @@ const SKI_KEY_MAP = {
 window.addEventListener("keydown", (e) => {
   const mod = window.__ski;
   let vk = SKI_KEY_MAP[e.code];
-  if (vk === undefined && e.code.length === 5 &&
+  if (vk === undefined && e.code.length === 4 &&
       e.code.charCodeAt(0) === 75 && e.code.charCodeAt(1) === 101 &&
       e.code.charCodeAt(2) === 121 && /* "KeyA".."KeyZ" */
       e.code.charCodeAt(3) >= 65 && e.code.charCodeAt(3) <= 90)
