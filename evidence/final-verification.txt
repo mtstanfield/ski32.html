@@ -1,0 +1,30 @@
+# SkiFree full verification matrix (T23 closeout)
+# 2026-09-02 UTC
+# original = ski32.exe + T8 seed-freeze + T14 tick/pause stub (harness/stub_patch.py)
+# rebuild  = build-native-harness/ski.exe (i686 mingw, -DSKI_HARNESS=ON; wine, real GDI)
+# wasm     = build-wasmdiff (emscripten + shim, -DSKI_HARNESS=ON -DSKI_DETERMINISTIC=ON)
+# diff     = harness/diff.py  tol=0  scene 760x734 minus panel mask (620,0)-(760,60)  shift 0
+# M2 = rebuild vs original (wine, Xvfb :99).  M3 = wasm vs rebuild (headless Chrome CDP).
+# Result: 16/16 PASS (0 differing scene pixels).
+# Notes: s04 M2 was bounded to --max-tick 400 (a kill-race truncated one POST-scenario
+#   frame; the unbounded overlap would load it) — the 401 scenario frames are 0px.
+#   s08 is 1200 ticks but the F3 pause kills the 40 ms timer at tick 301, so both sides
+#   stop at 301 frames (a live-game property); the diff compares the pre-pause overlap.
+# M2 (rebuild vs original)
+diff harness/frames/orig_s01_menu vs harness/frames/rebuild_s01_menu: 303 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/orig_s02_start vs harness/frames/rebuild_s02_start: 403 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/orig_s03_steering vs harness/frames/rebuild_s03_steering: 808 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/orig_s04_crouch vs harness/frames/rebuild_s04_crouch: 401 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/orig_s05_modes vs harness/frames/rebuild_s05_modes: 808 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/orig_s06_longrun vs harness/frames/rebuild_s06_longrun: 3004 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/orig_s07_monster vs harness/frames/rebuild_s07_monster: 4004 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/orig_s08_pause_scores vs harness/frames/rebuild_s08_pause_scores: 301 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+# M3 (wasm vs rebuild)
+diff harness/frames/rebuild_s01_menu vs harness/frames/wasm_s01_menu: 301 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/rebuild_s02_start vs harness/frames/wasm_s02_start: 401 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/rebuild_s03_steering vs harness/frames/wasm_s03_steering: 801 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/rebuild_s04_crouch vs harness/frames/wasm_s04_crouch: 401 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/rebuild_s05_modes vs harness/frames/wasm_s05_modes: 801 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/rebuild_s06_longrun vs harness/frames/wasm_s06_longrun: 3001 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/rebuild_s07_monster vs harness/frames/wasm_s07_monster: 4001 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
+diff harness/frames/rebuild_s08_pause_scores vs harness/frames/wasm_s08_pause_scores: 301 frames, 0 failing, worst 0px, mask 620,0,760,60, shift 0 -> PASS
