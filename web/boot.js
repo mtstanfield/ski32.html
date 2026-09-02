@@ -142,18 +142,28 @@ setInterval(() => {
     if (!ov) {
       ov = document.createElement("div");
       ov.id = "ski-box";
-      ov.style.cssText = "position:fixed;inset:0;display:flex;" +
+      /* center on the canvas (the game's main window — the original boxes
+         with owner g_c6c8), not the viewport: inset:0 would center in the
+         whole page, below the canvas on a tall/narrow window */
+      const cr = canvas.getBoundingClientRect();
+      ov.style.cssText = "position:fixed;display:flex;" +
         "align-items:center;justify-content:center;" +
-        "background:rgba(0,0,0,0.4);z-index:10";
+        "background:rgba(0,0,0,0.4);z-index:10;" +
+        "left:" + cr.left + "px;top:" + cr.top + "px;" +
+        "width:" + cr.width + "px;height:" + cr.height + "px;";
       const dlg = document.createElement("div");
       dlg.style.cssText = "background:#c0c0c0;border:2px solid;border-color:" +
         "#fff #000 #000 #fff;padding:0;min-width:320px;font:12px 'MS Sans Serif',sans-serif";
       const cap = document.createElement("div");
       cap.style.cssText = "background:#000080;color:#fff;padding:3px 6px";
-      cap.textContent = mod._ski_messagebox_caption() || "";
+      /* the C getter returns a char* (a pointer integer in JS) — marshal
+         it with UTF8ToString, or the raw address shows up as the text */
+      const capPtr = mod._ski_messagebox_caption();
+      cap.textContent = capPtr ? mod.UTF8ToString(capPtr) : "";
       const txt = document.createElement("div");
       txt.style.cssText = "padding:16px 12px;white-space:pre-wrap";
-      txt.textContent = mod._ski_messagebox_text() || "";
+      const txtPtr = mod._ski_messagebox_text();
+      txt.textContent = txtPtr ? mod.UTF8ToString(txtPtr) : "";
       const row = document.createElement("div");
       row.style.cssText = "display:flex;justify-content:center;gap:8px;" +
         "padding:0 0 12px";
