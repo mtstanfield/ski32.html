@@ -1,16 +1,19 @@
+This project was used as a sort of benchmark for Qwen 3.8 27B. All work was performed by Qwen 3.8 27B using oh-my-pi (https://github.com/can1357/oh-my-pi).
+
+The model was able to:
+* dissemble the original ski32.exe
+* create a full decompilation, using Ghidra and the disassembly
+* use this new decompiled source to build a WASM port.
+
+6x the file size for portability...there are certainly additional optimizations that could likely be made, but as a benchmark this was sufficient.
+
+---
+
 # SkiFree 1.04 — decompilation + pixel-perfect WASM port
 
 A full annotated decompilation of **SkiFree 1.04 32-bit** (`original/ski32.exe`),
 and a browser port compiled from the same reconstructed C, verified
 frame-by-frame to be **pixel-identical** to the original.
-
-## Rights
-
-This is a **private** project (personal use; not for redistribution or public
-hosting). SkiFree was created by **Chris Pirih** for Microsoft's Entertainment
-Pack 3 (1991); `ski32.exe` is the 2005 32-bit build he compiled from his
-(unpublished) `ski2.c` source. We decompiled the EXE only — no source was
-available. No contact has been made with the author.
 
 ## Layout
 
