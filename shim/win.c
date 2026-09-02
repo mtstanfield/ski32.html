@@ -14,11 +14,23 @@
  *  - MoveWindow dispatches WM_SIZE / WM_MOVE synchronously on geometry
  *    change and marks the window dirty (status_reposition path).
  *  - InvalidateRect marks dirty (the game always passes NULL rc -> full
- *    client); there is no WM_ERASEBKGND pass: painting is
- *    dirty-driven. (The decompiled class records carry
- *    hbrBackground = GetStockObject(0), which under the reference's
- *    wine 9.0 is the WHITE brush — erase-white, matching the
- *    white-initial surface below; T19 review, 66993e1.)
+ *    client). Painting is dirty-driven with TWO emulations of what wine
+ *    9.0 (the contract) does, both needed to keep the status panel clean:
+ *    (a) before each WM_PAINT the pump fills the client with the class
+ *    hbrBackground (stock 0 = WHITE for both classes, misc.c GetStockObject)
+ *    — the WM_ERASEBKGND the game's wprocs never handle; and (b) a draw to
+ *    a window's OWN DC invalidates that window (on_dc_mutated draw-hook,
+ *    guarded by `painting` so a window's own paint doesn't re-dirty it).
+ *    The status panel is the case that matters: the game repaints its
+ *    values straight onto the status DC (TextOutA via ski_status_draw_values,
+ *    ski_core.c:1601/2675, throttled every 0x147 ms) OUTSIDE a WM_PAINT;
+ *    under wine that draw invalidates the child so the next WM_PAINT erases
+ *    it white and status_paint redraws it clean. Verified against the
+ *    original: s03 frames 500/700 panels are crisp after hundreds of value
+ *    changes — the pre-fix shim (no erase, no invalidate-on-draw) let the
+ *    subpixel-AA text accumulate and smear. (T19 review 66993e1 noted the
+ *    stock-0 white; the erase/invalidate emulation was added in M4 after
+ *    LAN testing exposed the smear the masked 8-scenario diff had hidden.)
  *  - Timers: the rAF main loop's scheduler posts the game's 40 ms callback
  *    timer (id 0x29a) at a fixed real-time cadence with catch-up after
  *    throttling. The virtual clock (GetTickCount) advances by exactly the
@@ -333,6 +345,38 @@ static int mq_pop(MqMsg *out)
 }
 
 /* ---- dispatch ---------------------------------------------------------- */
+/* A window's class background brush (RegisterClassA's hbrBackground): the
+ * WM_ERASEBKGND fill color, looked up by class name. Both game classes
+ * carry GetStockObject(0) (wine white). */
+static HBRUSH win_cls_bg(const ShimWin *v)
+{
+    int i;
+    for (i = 0; i < g_class_n; i++)
+        if (g_classes[i].name && !strcmp(g_classes[i].name, v->cls))
+            return g_classes[i].bg;
+    return NULL;
+}
+
+/* Draw-hook target (shim_set_draw_hook): a draw to a window's own DC
+ * invalidates that window, exactly as real Win32/wine 9.0 do. This is what
+ * clears the status panel during play: the game paints its values straight
+ * onto the status DC (TextOutA via ski_status_draw_values, ski_core.c:1601/
+ * 2675) OUTSIDE a WM_PAINT every 0x147 ms; under wine that invalidates the
+ * child, so the next WM_PAINT erases it (win_cls_bg = stock-0 white) and
+ * status_paint redraws it clean. The `painting` guard stops a window's own
+ * BeginPaint..EndPaint draws from re-dirtying it (no busy repaint loop).
+ * Top-levels are unaffected in practice: the main window's scene draws all
+ * happen inside its WM_PAINT, so they never re-dirty here. */
+static void on_dc_mutated(HDC dc)
+{
+    int i;
+    for (i = 0; i < SKI_WIN_MAX; i++) {
+        ShimWin *w = &g_wins[i];
+        if (w->used && !w->dead && w->dc == dc && !w->painting)
+            w->dirty = 1;
+    }
+}
+
 static LRESULT dispatch1(const MqMsg *m)
 {
     ShimWin *w = m->h;
@@ -347,8 +391,33 @@ static LRESULT dispatch1(const MqMsg *m)
             return g_timer_fn((HWND)w, m->wp, WM_TIMER, GetTickCount());
         return 0;
     }
-    if (w && !w->dead && w->proc)
+    if (w && !w->dead && w->proc) {
+        if (m->msg == WM_PAINT) {
+            /* Emulate the WM_ERASEBKGND the reference (wine 9.0) sends
+             * before each WM_PAINT: the default DefWindowProc fills the
+             * dirty region with the class hbrBackground (stock 0 = the
+             * WHITE brush for both SkiMain and SkiStatus — misc.c
+             * GetStockObject, measured wine 9.0). The game's wprocs don't
+             * handle WM_ERASEBKGND, so this default fill is what keeps a
+             * window that does NOT fully redraw its client from
+             * accumulating its redrawn content. The status panel is the
+             * case that matters: status_paint (ski_win.c) re-draws only
+             * its 1px ring + labels + values over the previous frame, so
+             * without the erase the wine subpixel-AA text fringes pile up
+             * and the digits smear together as the values change. The
+             * main window is a no-op: it already clears the client white
+             * itself (the FillRect at ski_win.c:570) before drawing the
+             * scene. A NULL class brush (out-of-range stock) no-ops in
+             * FillRect — real-GDI "no erase" — so this stays faithful. */
+            RECT rc;
+            rc.left = 0;
+            rc.top = 0;
+            rc.right = w->cw;
+            rc.bottom = w->ch;
+            FillRect(w->dc, &rc, win_cls_bg(w));
+        }
         return w->proc((HWND)w, m->msg, m->wp, m->lp);
+    }
     return 0;
 }
 
@@ -656,6 +725,7 @@ void ski_start_pump(void)
 {
     if (!g_loop_started) {
         g_loop_started = 1;
+        shim_set_draw_hook(on_dc_mutated);
         emscripten_set_main_loop(ski_mainloop, 0, 0);
     }
 }
@@ -672,12 +742,15 @@ BOOL BeginPaint(HWND h, PAINTSTRUCT *ps)
     ps->rcPaint.bottom = v->ch;
     ps->fErase = 1;
     v->dirty = 0;
+    v->painting = 1; /* the window's own paint draws don't re-dirty it */
     return TRUE;
 }
 
 BOOL EndPaint(HWND h, const PAINTSTRUCT *ps)
 {
-    (void)h; (void)ps;
+    (void)ps;
+    if (h)
+        ((ShimWin *)h)->painting = 0;
     canvas_flush();
     return TRUE;
 }

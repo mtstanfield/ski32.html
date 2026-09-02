@@ -60,6 +60,18 @@
  * loader treats a NULL return as failure, ski_core.c:268). */
 HDC        shim_dc_new(int w, int h);
 void       shim_dc_free(HDC dc);
+
+/* Draw-hook: win.c registers a callback that fires after any DC mutation
+ * (core_fill / core_blt / TextOutA). It emulates real Win32's "drawing to a
+ * window's DC invalidates the window" — the game draws its status-panel
+ * values straight onto the status DC (ski_status_draw_values -> TextOutA,
+ * ski_core.c:1601/2675) OUTSIDE a WM_PAINT, and under wine 9.0 that draw
+ * invalidates the child so the next WM_PAINT erases + redraws it clean
+ * (verified: original s03 frame 500/700 panels are crisp after hundreds of
+ * value changes). Without it the shim's status panel accumulates subpixel-AA
+ * text and smears. No-op until win.c calls shim_set_draw_hook. */
+void       shim_set_draw_hook(void (*hook)(HDC dc));
+void       shim_dc_mutated(HDC dc);
 void       shim_dc_size(HDC dc, int *w, int *h);
 void       shim_dc_px(const HDC dc, const uint8_t **px); /* own surface; NULL if none */
 void       shim_dc_fill(HDC dc, int x, int y, int w, int h, COLORREF c);

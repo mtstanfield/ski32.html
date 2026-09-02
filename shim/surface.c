@@ -141,6 +141,11 @@ static int rop_bit(uint32_t rop, int d, int s)
     }
 }
 
+/* ---- draw-hook (see surface.h) ---------------------------------------- */
+static void (*g_draw_hook)(HDC);
+void shim_set_draw_hook(void (*hook)(HDC)) { g_draw_hook = hook; }
+void shim_dc_mutated(HDC dc) { if (g_draw_hook) g_draw_hook(dc); }
+
 /* ---- core ops (clipping on every path) -------------------------------- */
 static int core_fill(ShimDC *d, int x, int y, int w, int h, uint32_t c)
 {
@@ -173,6 +178,7 @@ static int core_fill(ShimDC *d, int x, int y, int w, int h, uint32_t c)
             }
         }
     }
+    shim_dc_mutated((HDC)d);
     return 1;
 }
 
@@ -234,6 +240,7 @@ static int core_blt(ShimDC *dst, int dx, int dy, int w, int h,
             }
         }
     }
+    shim_dc_mutated((HDC)dst);
     return 1;
 }
 

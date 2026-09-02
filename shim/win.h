@@ -14,6 +14,7 @@ typedef struct ShimWin {
     int visible;         /* ShowWindow'd */
     int minimized;       /* SW_MINIMIZE */
     int dirty;           /* full-client WM_PAINT pending (low priority) */
+    int painting;        /* inside BeginPaint..EndPaint (draws don't re-dirty) */
     const char *cls;
     const char *title;
     int x, y, w, h;      /* outer (top-level) or parent-client (child) */

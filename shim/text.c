@@ -90,6 +90,7 @@ BOOL TextOutA(HDC dc, int x, int y, LPCSTR s, int cnt)
         }
         x += g_font.adv[code - FONT_FIRST];
     }
+    shim_dc_mutated(dc);
     return TRUE;
 }
 
