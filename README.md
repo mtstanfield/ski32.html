@@ -7,6 +7,8 @@ The model was able to:
 
 6x the file size for portability...there are certainly additional optimizations that could likely be made, but as a benchmark this was sufficient.
 
+Playable here - https://mtstanfield.github.io/ski32.html
+
 ---
 
 # SkiFree 1.04 — decompilation + pixel-perfect WASM port
