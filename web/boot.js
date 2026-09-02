@@ -30,7 +30,33 @@
  * leave the harness inert for the whole run. */
 const nopump = new URLSearchParams(location.search).has("nopump");
 
-window.__ski_ready = createSki().then((mod) => {
+/* Single-file mode (ski32.html): the wasm is embedded as base64 in
+ * window.__SKI_WASM_B64__, so instantiate from that buffer via
+ * Module.instantiateWasm (ski.js:623 — when set, emscripten skips the
+ * ski.wasm fetch entirely). In the multi-file page (index.html) the var
+ * is absent, so createSki fetches ski.wasm as usual — one boot.js serves
+ * both. */
+function skiWasmOpts() {
+  const b64 = window.__SKI_WASM_B64__;
+  if (!b64)
+    return {};
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++)
+    bytes[i] = bin.charCodeAt(i);
+  return {
+    instantiateWasm: (imports, cb) =>
+      WebAssembly.instantiate(bytes, imports).then(
+        (r) => cb(r.instance),
+        (e) => {
+          console.error("wasm instantiate failed: " + e);
+          throw e;
+        }
+      ),
+  };
+}
+
+window.__ski_ready = createSki(skiWasmOpts()).then((mod) => {
   window.__ski = mod;
   /* The shim's rAF pump starts here, after main() (WinMain) returned:
      emscripten_set_main_loop inside main() unwinds the C stack
